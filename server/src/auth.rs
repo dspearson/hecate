@@ -45,7 +45,6 @@ pub mod test_support {
     }
 
     impl AuthManager {
-        #[allow(dead_code)]
         pub async fn new(config_path: Option<String>) -> Result<Self> {
             let manager = Self {
                 clients: Arc::new(RwLock::new(HashMap::new())),
@@ -59,31 +58,7 @@ pub mod test_support {
             Ok(manager)
         }
 
-        #[allow(dead_code)]
-        pub async fn from_single_key(key: &str) -> Result<Self> {
-            let mut clients = HashMap::new();
-
-            // Create a default client with the provided key
-            let client_id = "default".to_string();
-            let key_hash = Self::hash_key(key)?;
-
-            clients.insert(
-                client_id.clone(),
-                ClientCredentials {
-                    client_id,
-                    key_hash,
-                    permissions: ClientPermissions::default(),
-                },
-            );
-
-            Ok(Self {
-                clients: Arc::new(RwLock::new(clients)),
-                config_path: None,
-            })
-        }
-
-        #[allow(dead_code)]
-        pub async fn load_config(&self, path: &str) -> Result<()> {
+        async fn load_config(&self, path: &str) -> Result<()> {
             if !Path::new(path).exists() {
                 return Ok(());
             }
@@ -105,7 +80,6 @@ pub mod test_support {
             Ok(())
         }
 
-        #[allow(dead_code)]
         pub async fn authenticate(
             &self,
             client_id: &str,
@@ -128,46 +102,6 @@ pub mod test_support {
             Ok(None)
         }
 
-        #[allow(dead_code)]
-        pub async fn authenticate_token(
-            &self,
-            token: &str,
-        ) -> Result<Option<(String, ClientPermissions)>> {
-            // Token format: "client_id:key"
-            let parts: Vec<&str> = token.splitn(2, ':').collect();
-            if parts.len() != 2 {
-                return Ok(None);
-            }
-
-            let client_id = parts[0];
-            let key = parts[1];
-
-            if let Some(perms) = self.authenticate(client_id, key).await? {
-                Ok(Some((client_id.to_string(), perms)))
-            } else {
-                Ok(None)
-            }
-        }
-
-        #[allow(dead_code)]
-        fn hash_key(key: &str) -> Result<String> {
-            use argon2::{
-                password_hash::{PasswordHasher, SaltString},
-                Argon2,
-            };
-
-            let salt = SaltString::generate(&mut argon2::password_hash::rand_core::OsRng);
-            let argon2 = Argon2::default();
-
-            let hash = argon2
-                .hash_password(key.as_bytes(), &salt)
-                .map_err(|e| anyhow::anyhow!("Failed to hash key: {}", e))?
-                .to_string();
-
-            Ok(hash)
-        }
-
-        #[allow(dead_code)]
         fn verify_key(key: &str, hash: &str) -> Result<bool> {
             let parsed_hash = PasswordHash::new(hash)
                 .map_err(|e| anyhow::anyhow!("Invalid password hash: {}", e))?;
