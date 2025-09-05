@@ -204,8 +204,8 @@ impl SecureWebSocketClient {
             .join()
             .map_err(|_| anyhow::anyhow!("Archive creation thread panicked"))??;
 
-        // Mark last chunk as final if we haven't already
-        if chunk_count == 0 || !rx.is_closed() {
+        // Only send an empty final chunk if we haven't sent any data
+        if chunk_count == 0 {
             let msg = ClientMessage::DataChunk {
                 data: vec![],
                 is_final: true,
