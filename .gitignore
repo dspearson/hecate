@@ -1,0 +1,18 @@
+# Local configuration
+.hecate.toml
+.envrc
+
+# Build artifacts
+/target
+Cargo.lock
+
+# Generated files
+*.hecate
+*-key-*.png
+*.log
+
+# Test directories
+/test-*
+/local-store
+/storage
+test-store/
