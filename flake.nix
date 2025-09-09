@@ -74,9 +74,7 @@
 
           shellHook = ''
             echo "Hecate development environment"
-            echo "Musl target enabled for static binary compilation"
-            echo "Run './build-musl.sh' to build a static musl binary"
-            echo "Run './build-glibc.sh' to build a standard glibc binary"
+            echo "Run 'just' to see available build commands"
             
             # Export env vars for musl compilation
             export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=gcc
