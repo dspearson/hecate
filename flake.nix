@@ -15,16 +15,16 @@
           inherit system overlays;
         };
 
-        # Use nixpkgs Rust instead of rust-overlay for better integration
-        rustToolchain = pkgs.rustc;
-        cargoToolchain = pkgs.cargo;
+        # Use rust-overlay to get Rust with musl target
+        rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+          targets = [ "x86_64-unknown-linux-musl" ];
+        };
       in
       {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            # Rust toolchain
+            # Rust toolchain with musl target
             rustToolchain
-            cargoToolchain
             rust-analyzer
 
             # Build tools
@@ -37,9 +37,10 @@
             zstd
             openssl
 
-            # Musl toolchain
+            # Musl toolchain for static linking
             musl
             musl.dev
+            pkgsCross.musl64.stdenv.cc
 
             # Development tools
             cargo-edit
@@ -56,11 +57,11 @@
             binutils
           ];
 
-          # Environment variables for musl compilation using standard gcc
-          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER = "gcc";
-          CC_x86_64_unknown_linux_musl = "gcc";
-          CXX_x86_64_unknown_linux_musl = "g++";
-          AR_x86_64_unknown_linux_musl = "ar";
+          # Environment variables for musl compilation
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER = "${pkgs.pkgsCross.musl64.stdenv.cc}/bin/x86_64-unknown-linux-musl-gcc";
+          CC_x86_64_unknown_linux_musl = "${pkgs.pkgsCross.musl64.stdenv.cc}/bin/x86_64-unknown-linux-musl-gcc";
+          CXX_x86_64_unknown_linux_musl = "${pkgs.pkgsCross.musl64.stdenv.cc}/bin/x86_64-unknown-linux-musl-g++";
+          AR_x86_64_unknown_linux_musl = "${pkgs.pkgsCross.musl64.stdenv.cc}/bin/x86_64-unknown-linux-musl-ar";
 
           # Note: RUSTFLAGS for musl are set in .cargo/config.toml per target
           
@@ -69,11 +70,8 @@
           CARGO_BUILD_RUSTFLAGS = "-C link-arg=-Wl,-rpath,${pkgs.glibc}/lib";
 
           shellHook = ''
-            # Export env vars for musl compilation
-            export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=gcc
-            export CC_x86_64_unknown_linux_musl=gcc
-            export CXX_x86_64_unknown_linux_musl=g++
-            export AR_x86_64_unknown_linux_musl=ar
+            echo "Hecate development environment loaded"
+            echo "Run 'just' to see available commands"
           '';
         };
       });
