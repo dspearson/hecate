@@ -1,0 +1,43 @@
+# Mercury Server Configuration
+
+[server]
+# Port to listen on for WebSocket connections
+port = 10112
+
+# Interface to bind to
+bind = "0.0.0.0"
+
+# Directory to store uploaded files
+storage_path = "/var/lib/mercury/storage"
+
+# Maximum concurrent connections
+max_connections = 50
+
+# Connection timeout in seconds
+connection_timeout_secs = 300
+
+[tls]
+# TLS certificate and key paths (required)
+cert_path = "/etc/mercury/cert.pem"
+key_path = "/etc/mercury/key.pem"
+
+[auth]
+# Single shared authentication key (optional)
+# auth_key = "your-secret-key"
+
+# Path to JSON file with per-client credentials (optional)
+auth_config_path = "/etc/mercury/auth.json"
+
+[health]
+# Enable health check endpoint
+enabled = true
+
+# Port for health check HTTP server
+port = 9090
+
+[logging]
+# Log level: trace, debug, info, warn, error
+level = "info"
+
+# Log format: text or json
+format = "text"

@@ -1,73 +1,112 @@
 # Hecate build and development tasks
-# Default target is glibc release build
+# Monorepo with client and server components
 
 # Default recipe (runs when you just type 'just')
 default: help
 
-# Build release binary (glibc, dynamically linked)
-build:
-    cargo build --release
+# Build all components
+build: build-client build-server
 
-# Build debug binary (glibc)
-build-debug:
-    cargo build
+# Build client release binary (glibc, dynamically linked)
+build-client:
+    cd client && cargo build --release
 
-# Build static musl binary
+# Build server release binary
+build-server:
+    cd server && cargo build --release
+
+# Build all debug binaries
+build-debug: build-client-debug build-server-debug
+
+# Build client debug binary
+build-client-debug:
+    cd client && cargo build
+
+# Build server debug binary
+build-server-debug:
+    cd server && cargo build
+
+# Build static musl binary for client
 build-musl:
-    cargo build --release --target x86_64-unknown-linux-musl
+    cd client && cargo build --release --target x86_64-unknown-linux-musl
 
 # Run all tests
-test:
-    cargo test
+test: test-client test-server
+
+# Run client tests
+test-client:
+    cd client && cargo test
+
+# Run server tests
+test-server:
+    cd server && cargo test
 
 # Run tests with output
 test-verbose:
-    cargo test -- --nocapture
+    cd client && cargo test -- --nocapture
+    cd server && cargo test -- --nocapture
 
 # Run clippy linter
 clippy:
-    cargo clippy
+    cd client && cargo clippy
+    cd server && cargo clippy
 
 # Run clippy with all targets
 clippy-all:
-    cargo clippy --all-targets --all-features
+    cd client && cargo clippy --all-targets --all-features
+    cd server && cargo clippy --all-targets --all-features
 
 # Format code
 fmt:
-    cargo fmt
+    cd client && cargo fmt
+    cd server && cargo fmt
 
 # Check formatting without making changes
 fmt-check:
-    cargo fmt -- --check
+    cd client && cargo fmt -- --check
+    cd server && cargo fmt -- --check
 
 # Clean build artifacts
 clean:
-    cargo clean
+    cd client && cargo clean
+    cd server && cargo clean
 
 # Deep clean including target directory
 clean-all:
-    cargo clean
-    rm -rf target/
+    cd client && cargo clean
+    cd server && cargo clean
+    rm -rf client/target/ server/target/
 
 # Run security audit
 audit:
-    cargo audit
+    cd client && cargo audit
+    cd server && cargo audit
 
 # Check for outdated dependencies
 outdated:
-    cargo outdated
+    cd client && cargo outdated
+    cd server && cargo outdated
 
 # Update dependencies
 update:
-    cargo update
+    cd client && cargo update
+    cd server && cargo update
 
-# Build and run with verbose output
-run *ARGS:
-    cargo run --release -- {{ARGS}}
+# Run client with verbose output
+run-client *ARGS:
+    cd client && cargo run --release -- {{ARGS}}
 
-# Build and run debug version
-run-debug *ARGS:
-    cargo run -- {{ARGS}}
+# Run server
+run-server *ARGS:
+    cd server && cargo run --release -- {{ARGS}}
+
+# Run client debug version
+run-client-debug *ARGS:
+    cd client && cargo run -- {{ARGS}}
+
+# Run server debug version
+run-server-debug *ARGS:
+    cd server && cargo run -- {{ARGS}}
 
 # Full check: fmt, clippy, test, build
 check: fmt clippy test build
@@ -76,38 +115,49 @@ check: fmt clippy test build
 # Check musl build
 check-musl: build-musl
     @echo "✓ Musl build successful!"
-    @file target/x86_64-unknown-linux-musl/release/hecate | grep -q "statically linked" && echo "✓ Binary is statically linked" || echo "✗ Binary is not statically linked"
+    @file client/target/x86_64-unknown-linux-musl/release/hecate | grep -q "statically linked" && echo "✓ Binary is statically linked" || echo "✗ Binary is not statically linked"
 
 # Show binary sizes
 sizes:
     @echo "Binary sizes:"
-    @ls -lh target/x86_64-unknown-linux-gnu/release/hecate 2>/dev/null && echo "  glibc: $(ls -lh target/x86_64-unknown-linux-gnu/release/hecate 2>/dev/null | awk '{print $5}')" || echo "  glibc: not built"
-    @ls -lh target/x86_64-unknown-linux-musl/release/hecate 2>/dev/null && echo "  musl:  $(ls -lh target/x86_64-unknown-linux-musl/release/hecate 2>/dev/null | awk '{print $5}')" || echo "  musl:  not built"
+    @ls -lh client/target/release/hecate 2>/dev/null && echo "  client (glibc): $(ls -lh client/target/release/hecate 2>/dev/null | awk '{print $5}')" || echo "  client (glibc): not built"
+    @ls -lh client/target/x86_64-unknown-linux-musl/release/hecate 2>/dev/null && echo "  client (musl):  $(ls -lh client/target/x86_64-unknown-linux-musl/release/hecate 2>/dev/null | awk '{print $5}')" || echo "  client (musl):  not built"
+    @ls -lh server/target/release/mercury 2>/dev/null && echo "  server:         $(ls -lh server/target/release/mercury 2>/dev/null | awk '{print $5}')" || echo "  server:         not built"
 
 # Install locally (to ~/.cargo/bin)
-install:
-    cargo install --path .
+install: install-client install-server
+
+# Install client
+install-client:
+    cd client && cargo install --path .
+
+# Install server
+install-server:
+    cd server && cargo install --path .
 
 # Uninstall
 uninstall:
     cargo uninstall hecate
+    cargo uninstall mercury
 
 # Generate documentation
 doc:
-    cargo doc --no-deps --open
+    cd client && cargo doc --no-deps --open
 
 # Generate documentation for all dependencies
 doc-all:
-    cargo doc --open
+    cd client && cargo doc --open
 
 # Run benchmarks (if any)
 bench:
-    cargo bench
+    cd client && cargo bench
+    cd server && cargo bench
 
 # Count lines of code
 loc:
     @echo "Lines of code:"
-    @find src -name "*.rs" | xargs wc -l | tail -1
+    @echo "Client:" && find client/src -name "*.rs" | xargs wc -l | tail -1
+    @echo "Server:" && find server/src -name "*.rs" | xargs wc -l | tail -1
 
 # Show help
 help:
