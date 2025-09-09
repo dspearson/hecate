@@ -117,10 +117,10 @@ impl Config {
     /// Load config from a specific file
     pub fn load_from_file(path: &Path) -> Result<Self> {
         let contents = fs::read_to_string(path)
-            .with_context(|| format!("Failed to read config file: {:?}", path))?;
+            .with_context(|| format!("Failed to read config file: {path:?}"))?;
 
         let config: Config = toml::from_str(&contents)
-            .with_context(|| format!("Failed to parse config file: {:?}", path))?;
+            .with_context(|| format!("Failed to parse config file: {path:?}"))?;
 
         Ok(config)
     }
@@ -132,11 +132,11 @@ impl Config {
         // Create parent directory if needed
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create config directory: {:?}", parent))?;
+                .with_context(|| format!("Failed to create config directory: {parent:?}"))?;
         }
 
         fs::write(path, contents)
-            .with_context(|| format!("Failed to write config file: {:?}", path))?;
+            .with_context(|| format!("Failed to write config file: {path:?}"))?;
 
         Ok(())
     }

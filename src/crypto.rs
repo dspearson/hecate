@@ -56,24 +56,39 @@ pub fn encrypt_stream_simple<R: Read, W: Write>(
     // Write the header first
     writer.write_all(&header)?;
 
-    let mut temp_storage = Vec::new();
+    let mut buffer = vec![0u8; chunk_size];
+    let mut next_buffer = vec![0u8; chunk_size];
 
-    // Read all data into temporary storage first to know when we're at the end
-    reader.read_to_end(&mut temp_storage)?;
+    // Read first chunk to start the pipeline
+    let mut current_len = reader.read(&mut buffer)?;
 
-    let total_len = temp_storage.len();
-    let mut pos = 0;
+    loop {
+        // Try to read the next chunk to know if current is the last
+        let next_len = if current_len > 0 {
+            reader.read(&mut next_buffer)?
+        } else {
+            0
+        };
 
-    while pos < total_len {
-        let remaining = total_len - pos;
-        let chunk_len = remaining.min(chunk_size);
-        let chunk = &temp_storage[pos..pos + chunk_len];
+        if current_len == 0 {
+            // No data at all - send empty final chunk
+            let encrypted_chunk = state
+                .push(&[], None, TAG_FINAL)
+                .map_err(|e| anyhow::anyhow!("Encryption failed: {:?}", e))?;
 
-        let is_final = pos + chunk_len >= total_len;
+            let len = encrypted_chunk.len() as u32;
+            writer.write_all(&len.to_le_bytes())?;
+            writer.write_all(&encrypted_chunk)?;
+            break;
+        }
+
+        // Determine if this is the final chunk
+        let is_final = next_len == 0;
         let tag = if is_final { TAG_FINAL } else { TAG_MESSAGE };
 
+        // Encrypt current chunk
         let encrypted_chunk = state
-            .push(chunk, None, tag)
+            .push(&buffer[..current_len], None, tag)
             .map_err(|e| anyhow::anyhow!("Encryption failed: {:?}", e))?;
 
         // Write chunk length and encrypted data
@@ -81,11 +96,18 @@ pub fn encrypt_stream_simple<R: Read, W: Write>(
         writer.write_all(&len.to_le_bytes())?;
         writer.write_all(&encrypted_chunk)?;
 
-        pos += chunk_len;
+        if is_final {
+            break;
+        }
+
+        // Swap buffers for next iteration
+        std::mem::swap(&mut buffer, &mut next_buffer);
+        current_len = next_len;
     }
 
-    // Zeroize temporary storage
-    temp_storage.zeroize();
+    // Zeroize buffers
+    buffer.zeroize();
+    next_buffer.zeroize();
 
     writer.flush()?;
     Ok(())

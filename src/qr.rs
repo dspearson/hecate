@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
-use image::Luma;
+use image::{DynamicImage, Luma};
 use qrcode::QrCode;
 use std::path::{Path, PathBuf};
 
-use crate::shamir::{Share, serialise_share};
+use crate::shamir::{Share, deserialise_share, serialise_share};
 
 pub fn generate_qr_codes(shares: &[Share], base_filename: &str) -> Result<Vec<PathBuf>> {
     let mut qr_paths = Vec::new();
@@ -40,6 +40,43 @@ pub fn generate_qr_codes(shares: &[Share], base_filename: &str) -> Result<Vec<Pa
     }
 
     Ok(qr_paths)
+}
+
+/// Decode QR code from an image file
+pub fn decode_qr_from_image(img: DynamicImage) -> Result<String> {
+    use rqrr::PreparedImage;
+
+    // Convert to grayscale for QR detection
+    let gray_img = img.to_luma8();
+
+    // Prepare the image for QR detection
+    let mut prepared = PreparedImage::prepare(gray_img);
+
+    // Detect QR codes in the image
+    let grids = prepared.detect_grids();
+
+    if grids.is_empty() {
+        anyhow::bail!("No QR code found in image");
+    }
+
+    // Decode the first QR code found
+    let (_, content) = grids[0]
+        .decode()
+        .map_err(|e| anyhow::anyhow!("Failed to decode QR code: {:?}", e))?;
+
+    Ok(content)
+}
+
+/// Read and parse a QR code share from an image file
+pub fn parse_qr_share(file_path: &str) -> Result<Share> {
+    // Read QR code from image file
+    let img =
+        image::open(file_path).with_context(|| format!("Failed to open image: {file_path}"))?;
+
+    let qr_data = decode_qr_from_image(img)?;
+
+    // Parse the decoded QR data
+    deserialise_share(&qr_data)
 }
 
 #[cfg(test)]

@@ -48,7 +48,7 @@ impl Write for StreamingUploadWriter {
 
             if self.buffer.len() == MAX_CHUNK_SIZE {
                 self.flush_buffer()
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+                    .map_err(std::io::Error::other)?;
             }
         }
 
@@ -57,7 +57,7 @@ impl Write for StreamingUploadWriter {
 
     fn flush(&mut self) -> std::io::Result<()> {
         self.flush_buffer()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+            .map_err(std::io::Error::other)
     }
 }
 
@@ -85,8 +85,8 @@ pub fn create_and_stream_encrypted_archive(
     let estimated_size = (input_size as f64 * 0.8 * 1.02) as u64;
 
     if verbose {
-        eprintln!("Input size: {} bytes", input_size);
-        eprintln!("Estimated upload size: ~{} bytes", estimated_size);
+        eprintln!("Input size: {input_size} bytes");
+        eprintln!("Estimated upload size: ~{estimated_size} bytes");
     }
 
     let rt = Runtime::new().context("Failed to create async runtime")?;
@@ -98,7 +98,7 @@ pub fn create_and_stream_encrypted_archive(
             .trim_start_matches("ws://");
 
         if verbose {
-            eprintln!("Connecting to secure server: {}", clean_addr);
+            eprintln!("Connecting to secure server: {clean_addr}");
         }
 
         // Connect to WebSocket server

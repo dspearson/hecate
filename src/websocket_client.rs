@@ -2,68 +2,91 @@ use crate::config::TlsConfig;
 use crate::protocol::{
     ClientMessage, ErrorCode, FileInfo, ServerMessage, validate_chunk_size, validate_filename,
 };
+use crate::tls_verifiers::{AcceptAnyServerCert, FingerprintVerifier};
 use anyhow::{Context, Result};
 use futures_util::{SinkExt, StreamExt};
 use rustls::ClientConfig;
 use std::sync::Arc;
-use std::sync::Arc as StdArc;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
+use tokio_rustls::client::TlsStream;
 use tokio_tungstenite::{
-    Connector, MaybeTlsStream, WebSocketStream, connect_async, connect_async_tls_with_config,
-    tungstenite::Message,
+    WebSocketStream, client_async,
+    tungstenite::{Message, client::IntoClientRequest},
 };
 
 pub struct SecureWebSocketClient {
-    ws: Arc<Mutex<WebSocketStream<MaybeTlsStream<TcpStream>>>>,
+    ws: Arc<Mutex<WebSocketStream<TlsStream<TcpStream>>>>,
 }
 
 impl SecureWebSocketClient {
     pub async fn connect(server_addr: &str, tls_config: &TlsConfig) -> Result<Self> {
-        // Check if server address includes scheme
-        let url = if server_addr.starts_with("ws://") || server_addr.starts_with("wss://") {
-            server_addr.to_string()
+        use rustls::pki_types::ServerName;
+        use tokio_rustls::TlsConnector;
+
+        // Parse the server address
+        let clean_addr = server_addr
+            .trim_start_matches("wss://")
+            .trim_start_matches("ws://");
+
+        // Split host and port
+        let (host, port) = if let Some(colon_pos) = clean_addr.rfind(':') {
+            let host = &clean_addr[..colon_pos];
+            let port = clean_addr[colon_pos + 1..].parse::<u16>().unwrap_or(443);
+            (host, port)
         } else {
-            // Default to secure WebSocket (no path needed - server accepts raw WebSocket)
-            format!("wss://{}", server_addr)
+            (clean_addr, 443)
         };
 
-        let (ws_stream, _) = if !tls_config.verify {
-            // Accept any certificate
+        // Create TCP connection
+        let tcp_stream = TcpStream::connect((host, port))
+            .await
+            .with_context(|| format!("Failed to connect to {host}:{port}"))?;
+
+        // Configure TLS
+        let config = if !tls_config.verify {
             eprintln!("Warning: Certificate verification disabled");
-
-            // Create a custom rustls config that accepts any certificate
-            let config = ClientConfig::builder()
+            ClientConfig::builder()
                 .dangerous()
-                .with_custom_certificate_verifier(StdArc::new(AcceptAnyServerCert::new()))
-                .with_no_client_auth();
-
-            let connector = Connector::Rustls(StdArc::new(config));
-
-            connect_async_tls_with_config(&url, None, false, Some(connector))
-                .await
-                .context("Failed to connect to WebSocket server")?
+                .with_custom_certificate_verifier(Arc::new(AcceptAnyServerCert::new()))
+                .with_no_client_auth()
         } else if let Some(fingerprint) = &tls_config.fingerprint {
-            // Verify against specific fingerprint
-            eprintln!("Verifying certificate fingerprint: {}", fingerprint);
-
+            eprintln!("Verifying certificate fingerprint: {fingerprint}");
             let verifier = FingerprintVerifier::new(fingerprint.clone())?;
-            let config = ClientConfig::builder()
+            ClientConfig::builder()
                 .dangerous()
-                .with_custom_certificate_verifier(StdArc::new(verifier))
-                .with_no_client_auth();
-
-            let connector = Connector::Rustls(StdArc::new(config));
-
-            connect_async_tls_with_config(&url, None, false, Some(connector))
-                .await
-                .context("Failed to connect to WebSocket server")?
+                .with_custom_certificate_verifier(Arc::new(verifier))
+                .with_no_client_auth()
         } else {
-            // Production: use proper certificate validation
-            connect_async(&url)
-                .await
-                .context("Failed to connect to WebSocket server")?
+            // Use webpki roots for certificate validation
+            let root_store = rustls::RootCertStore {
+                roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+            };
+
+            ClientConfig::builder()
+                .with_root_certificates(root_store)
+                .with_no_client_auth()
         };
+
+        // Create TLS connector and establish TLS connection
+        let connector = TlsConnector::from(Arc::new(config));
+        let server_name = ServerName::try_from(host)
+            .map_err(|_| anyhow::anyhow!("Invalid server name: {}", host))?
+            .to_owned();
+
+        let tls_stream = connector
+            .connect(server_name, tcp_stream)
+            .await
+            .context("Failed to establish TLS connection")?;
+
+        // Create WebSocket URL and request
+        let ws_url = format!("wss://{clean_addr}");
+        let request = ws_url.into_client_request()?;
+
+        // Upgrade to WebSocket using the TLS stream directly
+        let (ws_stream, _) = client_async(request, tls_stream)
+            .await
+            .context("Failed to establish WebSocket connection")?;
 
         Ok(Self {
             ws: Arc::new(Mutex::new(ws_stream)),
@@ -132,7 +155,7 @@ impl SecureWebSocketClient {
         };
 
         if verbose {
-            eprintln!("Server accepted upload as: {}", accepted_name);
+            eprintln!("Server accepted upload as: {accepted_name}");
             eprintln!("Starting streaming upload...");
         }
 
@@ -178,7 +201,7 @@ impl SecureWebSocketClient {
                 } else {
                     0
                 };
-                eprintln!("Upload progress: ~{}% ({} bytes sent)", percent, total_sent);
+                eprintln!("Upload progress: ~{percent}% ({total_sent} bytes sent)");
             }
 
             // Wait for chunk acknowledgment
@@ -218,12 +241,11 @@ impl SecureWebSocketClient {
             ServerMessage::UploadComplete { total_bytes } => {
                 if verbose {
                     eprintln!(
-                        "Upload complete: {} bytes (estimated: {} bytes)",
-                        total_bytes, estimated_size
+                        "Upload complete: {total_bytes} bytes (estimated: {estimated_size} bytes)"
                     );
                     if total_bytes < estimated_size {
                         let compression = 100 - (total_bytes * 100 / estimated_size);
-                        eprintln!("Achieved ~{}% compression", compression);
+                        eprintln!("Achieved ~{compression}% compression");
                     }
                 }
             }
@@ -283,7 +305,7 @@ impl SecureWebSocketClient {
                         .context("Failed to write chunk to output")?;
 
                     if verbose && (total_received % (10 * 1024 * 1024) == 0 || is_final) {
-                        eprintln!("Received {} bytes", total_received);
+                        eprintln!("Received {total_received} bytes");
                     }
 
                     if is_final {
@@ -303,7 +325,7 @@ impl SecureWebSocketClient {
         writer.flush().context("Failed to flush output")?;
 
         if verbose {
-            eprintln!("Successfully downloaded {} bytes", total_received);
+            eprintln!("Successfully downloaded {total_received} bytes");
         }
 
         Ok(total_received)
@@ -362,151 +384,6 @@ impl Drop for SecureWebSocketClient {
     }
 }
 
-// Custom certificate verifier that accepts any certificate (for development only)
-#[derive(Debug)]
-struct AcceptAnyServerCert;
-
-impl AcceptAnyServerCert {
-    fn new() -> Self {
-        Self
-    }
-}
-
-// Certificate verifier that checks against a specific fingerprint
-#[derive(Debug)]
-struct FingerprintVerifier {
-    fingerprint: Vec<u8>,
-}
-
-impl FingerprintVerifier {
-    fn new(fingerprint_hex: String) -> Result<Self> {
-        // Remove any colons or spaces from the fingerprint
-        let clean_hex: String = fingerprint_hex
-            .chars()
-            .filter(|c| c.is_ascii_hexdigit())
-            .collect();
-
-        // Convert hex string to bytes
-        let fingerprint = hex::decode(&clean_hex)
-            .with_context(|| format!("Invalid fingerprint hex: {}", fingerprint_hex))?;
-
-        if fingerprint.len() != 32 {
-            anyhow::bail!(
-                "Fingerprint must be 32 bytes (SHA256), got {} bytes",
-                fingerprint.len()
-            );
-        }
-
-        Ok(Self { fingerprint })
-    }
-
-    fn verify_cert(&self, cert: &rustls::pki_types::CertificateDer<'_>) -> bool {
-        use sha2::{Digest, Sha256};
-
-        let mut hasher = Sha256::new();
-        hasher.update(cert.as_ref());
-        let cert_fingerprint = hasher.finalize();
-
-        cert_fingerprint.as_slice() == self.fingerprint
-    }
-}
-
-impl rustls::client::danger::ServerCertVerifier for FingerprintVerifier {
-    fn verify_server_cert(
-        &self,
-        end_entity: &rustls::pki_types::CertificateDer<'_>,
-        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
-        _server_name: &rustls::pki_types::ServerName<'_>,
-        _ocsp_response: &[u8],
-        _now: rustls::pki_types::UnixTime,
-    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
-        if self.verify_cert(end_entity) {
-            Ok(rustls::client::danger::ServerCertVerified::assertion())
-        } else {
-            Err(rustls::Error::General(
-                "Certificate fingerprint does not match expected value".to_string(),
-            ))
-        }
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        _message: &[u8],
-        _cert: &rustls::pki_types::CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        _message: &[u8],
-        _cert: &rustls::pki_types::CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        vec![
-            rustls::SignatureScheme::RSA_PKCS1_SHA256,
-            rustls::SignatureScheme::RSA_PKCS1_SHA384,
-            rustls::SignatureScheme::RSA_PKCS1_SHA512,
-            rustls::SignatureScheme::ECDSA_NISTP256_SHA256,
-            rustls::SignatureScheme::ECDSA_NISTP384_SHA384,
-            rustls::SignatureScheme::RSA_PSS_SHA256,
-            rustls::SignatureScheme::RSA_PSS_SHA384,
-            rustls::SignatureScheme::RSA_PSS_SHA512,
-            rustls::SignatureScheme::ED25519,
-        ]
-    }
-}
-
-impl rustls::client::danger::ServerCertVerifier for AcceptAnyServerCert {
-    fn verify_server_cert(
-        &self,
-        _end_entity: &rustls::pki_types::CertificateDer<'_>,
-        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
-        _server_name: &rustls::pki_types::ServerName<'_>,
-        _ocsp_response: &[u8],
-        _now: rustls::pki_types::UnixTime,
-    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
-        Ok(rustls::client::danger::ServerCertVerified::assertion())
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        _message: &[u8],
-        _cert: &rustls::pki_types::CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        _message: &[u8],
-        _cert: &rustls::pki_types::CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        vec![
-            rustls::SignatureScheme::RSA_PKCS1_SHA256,
-            rustls::SignatureScheme::RSA_PKCS1_SHA384,
-            rustls::SignatureScheme::RSA_PKCS1_SHA512,
-            rustls::SignatureScheme::ECDSA_NISTP256_SHA256,
-            rustls::SignatureScheme::ECDSA_NISTP384_SHA384,
-            rustls::SignatureScheme::RSA_PSS_SHA256,
-            rustls::SignatureScheme::RSA_PSS_SHA384,
-            rustls::SignatureScheme::RSA_PSS_SHA512,
-            rustls::SignatureScheme::ED25519,
-        ]
-    }
-}
-
 #[cfg(test)]
 mod tests {
 
@@ -515,10 +392,10 @@ mod tests {
         // Test URL construction logic
         let addr = "localhost:10112";
 
-        let url_ws = format!("ws://{}/ws", addr);
+        let url_ws = format!("ws://{addr}/ws");
         assert_eq!(url_ws, "ws://localhost:10112/ws");
 
-        let url_wss = format!("wss://{}/ws", addr);
+        let url_wss = format!("wss://{addr}/ws");
         assert_eq!(url_wss, "wss://localhost:10112/ws");
     }
 }

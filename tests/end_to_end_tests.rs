@@ -45,7 +45,7 @@ mod end_to_end_tests {
         // Create encrypted archive
         let archive_path = temp_dir.path().join("test.hecate");
         archive::create_encrypted_archive(
-            &vec![temp_dir.path().to_path_buf()],
+            &[temp_dir.path().to_path_buf()],
             archive_path.to_str().unwrap(),
             &key,
             false,
@@ -59,7 +59,7 @@ mod end_to_end_tests {
         let share_strings: Vec<String> = shares
             .iter()
             .take(2)
-            .map(|s| shamir::serialise_share(s))
+            .map(shamir::serialise_share)
             .collect();
 
         let raw_shares = shamir::parse_shares(&share_strings, false).unwrap();
@@ -99,7 +99,7 @@ mod end_to_end_tests {
         // Create archive with key1
         let archive_path = temp_dir.path().join("test.hecate");
         archive::create_encrypted_archive(
-            &vec![temp_dir.path().to_path_buf()],
+            &[temp_dir.path().to_path_buf()],
             archive_path.to_str().unwrap(),
             &key1,
             false,
@@ -133,7 +133,7 @@ mod end_to_end_tests {
         let share_strings: Vec<String> = shares
             .iter()
             .take(2)
-            .map(|s| shamir::serialise_share(s))
+            .map(shamir::serialise_share)
             .collect();
 
         let raw_shares = shamir::parse_shares(&share_strings, false).unwrap();
@@ -155,7 +155,7 @@ mod end_to_end_tests {
         let share_strings: Vec<String> = shares
             .iter()
             .take(1)
-            .map(|s| shamir::serialise_share(s))
+            .map(shamir::serialise_share)
             .collect();
 
         let result = shamir::parse_shares(&share_strings, false);
@@ -185,7 +185,7 @@ mod end_to_end_tests {
         // Encrypt large file
         let archive_path = temp_dir.path().join("large.hecate");
         archive::create_encrypted_archive(
-            &vec![large_file.clone()],
+            &[large_file.clone()],
             archive_path.to_str().unwrap(),
             &key,
             false,
@@ -278,7 +278,7 @@ mod end_to_end_tests {
 
             // Archive should handle symlinks (either follow or store as symlink)
             let result = archive::create_encrypted_archive(
-                &vec![temp_dir.path().to_path_buf()],
+                &[temp_dir.path().to_path_buf()],
                 archive_path.to_str().unwrap(),
                 &key,
                 false,
@@ -300,7 +300,7 @@ mod end_to_end_tests {
         for i in 0..5 {
             let key_clone = Arc::clone(&key);
             let handle = thread::spawn(move || {
-                let data = format!("Thread {} data", i).into_bytes();
+                let data = format!("Thread {i} data").into_bytes();
                 let mut encrypted = Vec::new();
 
                 crypto::encrypt_stream_simple(

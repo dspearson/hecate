@@ -1,0 +1,24 @@
+[target.x86_64-unknown-linux-musl]
+linker = "gcc"
+rustflags = [
+    "-C", "target-feature=+crt-static",
+]
+
+[target.aarch64-unknown-linux-musl]
+rustflags = [
+    "-C", "target-feature=+crt-static",
+    "-C", "link-self-contained=yes",
+]
+
+# Build target configuration
+# Use ./build-musl.sh for musl static builds
+# Use ./build-glibc.sh for standard glibc builds
+# Or use cargo build --target x86_64-unknown-linux-musl with env vars set
+
+[profile.release]
+# Optimisations for smaller binary size
+opt-level = "z"     # Optimise for size
+lto = true          # Enable Link Time Optimisation
+codegen-units = 1   # Single codegen unit for better optimisation
+strip = true        # Strip symbols from binary
+panic = "abort"     # Smaller panic handler

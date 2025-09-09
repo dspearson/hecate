@@ -84,8 +84,7 @@ mod security_tests {
             // Should reject any path with .. or absolute paths
             assert!(
                 path.contains("..") || path.starts_with('/') || path.starts_with("C:\\"),
-                "Path traversal not properly detected: {}",
-                path
+                "Path traversal not properly detected: {path}"
             );
         }
     }
@@ -187,7 +186,7 @@ mod security_tests {
         let sensitive_path = "/home/user/secret_keys/private.key";
         let _error = std::io::Error::new(
             std::io::ErrorKind::NotFound,
-            format!("File not found: {}", sensitive_path),
+            format!("File not found: {sensitive_path}"),
         );
 
         // Convert to string - should not contain sensitive path
@@ -271,7 +270,7 @@ mod security_tests {
             sensitive_field: "secret_password".to_string(),
         };
 
-        let debug_output = format!("{:?}", secure);
+        let debug_output = format!("{secure:?}");
         assert!(debug_output.contains("public"));
         assert!(!debug_output.contains("secret_password"));
         assert!(debug_output.contains("<redacted>"));
