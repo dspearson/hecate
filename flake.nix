@@ -68,10 +68,6 @@
           NIX_LDFLAGS = "-L${pkgs.glibc}/lib";
           CARGO_BUILD_RUSTFLAGS = "-C link-arg=-Wl,-rpath,${pkgs.glibc}/lib";
 
-          # Preserve existing environment variables
-          MERCURY_AUTH_KEY = "21b01ca51867c87285812b24793abf4df96acd465f6ff3e2e33d38ee85f4b83d";
-          HECATE_AUTH_KEY = "21b01ca51867c87285812b24793abf4df96acd465f6ff3e2e33d38ee85f4b83d";
-
           shellHook = ''
             # Export env vars for musl compilation
             export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=gcc
