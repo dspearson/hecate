@@ -55,8 +55,7 @@
           CXX_x86_64_unknown_linux_musl = "g++";
           AR_x86_64_unknown_linux_musl = "ar";
 
-          # For static linking
-          RUSTFLAGS = "-C target-feature=+crt-static";
+          # Note: RUSTFLAGS for musl are set in .cargo/config.toml per target
 
           # Preserve existing environment variables
           MERCURY_AUTH_KEY = "21b01ca51867c87285812b24793abf4df96acd465f6ff3e2e33d38ee85f4b83d";
