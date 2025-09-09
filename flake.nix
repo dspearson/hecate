@@ -15,21 +15,27 @@
           inherit system overlays;
         };
 
-        rustToolchain = pkgs.rust-bin.stable.latest.default.override {
-          extensions = [ "rust-src" "rust-analyzer" ];
-          targets = [ "x86_64-unknown-linux-musl" ];
-        };
+        # Use nixpkgs Rust instead of rust-overlay for better integration
+        rustToolchain = pkgs.rustc;
+        cargoToolchain = pkgs.cargo;
       in
       {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            # Rust toolchain with musl target
+            # Rust toolchain
             rustToolchain
+            cargoToolchain
+            rust-analyzer
 
             # Build tools
             pkg-config
             cmake
             gcc
+            
+            # Native dependencies
+            libsodium
+            zstd
+            openssl
 
             # Musl toolchain
             musl
@@ -39,6 +45,7 @@
             cargo-edit
             cargo-watch
             cargo-audit
+            just
 
             # Code quality tools
             shellcheck
@@ -56,6 +63,10 @@
           AR_x86_64_unknown_linux_musl = "ar";
 
           # Note: RUSTFLAGS for musl are set in .cargo/config.toml per target
+          
+          # Fix proc-macro linking by ensuring glibc is linked properly
+          NIX_LDFLAGS = "-L${pkgs.glibc}/lib";
+          CARGO_BUILD_RUSTFLAGS = "-C link-arg=-Wl,-rpath,${pkgs.glibc}/lib";
 
           # Preserve existing environment variables
           MERCURY_AUTH_KEY = "21b01ca51867c87285812b24793abf4df96acd465f6ff3e2e33d38ee85f4b83d";
