@@ -2,7 +2,7 @@
 # Default target is glibc release build
 
 # Default recipe (runs when you just type 'just')
-default: build
+default: help
 
 # Build release binary (glibc, dynamically linked)
 build:
