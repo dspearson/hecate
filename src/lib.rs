@@ -1,4 +1,5 @@
 pub mod archive;
+pub mod commands;
 pub mod config;
 pub mod crypto;
 pub mod online;
@@ -6,4 +7,5 @@ pub mod protocol;
 pub mod qr;
 pub mod shamir;
 pub mod streaming_upload;
+pub mod tls_verifiers;
 pub mod websocket_client;

@@ -10,9 +10,17 @@ Cargo.lock
 *.hecate
 *-key-*.png
 *.log
+logs/
 
 # Test directories
 /test-*
 /local-store
 /storage
 test-store/
+orrick/
+
+# Direnv
+.direnv/
+
+# Cookie storage
+.cookie-storage/

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod protocol_tests {
     use hecate::protocol::*;
-    use serde_json;
+    
 
     #[test]
     fn test_filename_validation_valid() {
@@ -38,12 +38,12 @@ mod protocol_tests {
     #[test]
     fn test_chunk_size_validation() {
         // Valid chunks
-        assert!(validate_chunk_size(&vec![1u8]).is_ok());
+        assert!(validate_chunk_size(&[1u8]).is_ok());
         assert!(validate_chunk_size(&vec![0u8; 1024]).is_ok());
         assert!(validate_chunk_size(&vec![0u8; MAX_CHUNK_SIZE]).is_ok());
 
         // Invalid chunks
-        assert!(validate_chunk_size(&vec![]).is_err());
+        assert!(validate_chunk_size(&[]).is_err());
         assert!(validate_chunk_size(&vec![0u8; MAX_CHUNK_SIZE + 1]).is_err());
     }
 

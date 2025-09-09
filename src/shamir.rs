@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use bip39::Mnemonic;
-use image::DynamicImage;
 use shamir::SecretData;
 use std::path::Path;
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -136,39 +135,9 @@ fn parse_single_share(input: &str, verbose: bool) -> Result<RawShare> {
 }
 
 fn parse_qr_share(file_path: &str) -> Result<RawShare> {
-    // Read QR code from image file
-    let img =
-        image::open(file_path).with_context(|| format!("Failed to open image: {}", file_path))?;
-
-    let qr_data = decode_qr_from_image(img)?;
-
-    // Parse the decoded QR data
-    let share = deserialise_share(&qr_data)?;
+    // Use the qr module's function to parse the QR share
+    let share = crate::qr::parse_qr_share(file_path)?;
     mnemonic_to_raw_share(&share)
-}
-
-fn decode_qr_from_image(img: DynamicImage) -> Result<String> {
-    use rqrr::PreparedImage;
-
-    // Convert to grayscale for QR detection
-    let gray_img = img.to_luma8();
-
-    // Prepare the image for QR detection
-    let mut prepared = PreparedImage::prepare(gray_img);
-
-    // Detect QR codes in the image
-    let grids = prepared.detect_grids();
-
-    if grids.is_empty() {
-        anyhow::bail!("No QR code found in image");
-    }
-
-    // Decode the first QR code found
-    let (_, content) = grids[0]
-        .decode()
-        .map_err(|e| anyhow::anyhow!("Failed to decode QR code: {:?}", e))?;
-
-    Ok(content)
 }
 
 fn parse_serialised_share(input: &str) -> Result<RawShare> {
@@ -245,115 +214,48 @@ pub fn combine_shares(shares: &[RawShare]) -> Result<Vec<u8>> {
 mod tests {
     use super::*;
 
-    // Test-only structure with data field
-    #[derive(Debug, Clone)]
-    struct TestShare {
-        index: u8,
-        data: Vec<u8>,
-        #[allow(dead_code)] // Used in test assertions
-        mnemonic: String,
-    }
-
-    fn split_secret_with_data(
-        secret: &[u8],
-        threshold: u8,
-        total_shares: u8,
-    ) -> Result<Vec<TestShare>> {
-        let secret_hex = hex::encode(secret);
-        let secret_data = SecretData::with_secret(&secret_hex, threshold);
-
-        let mut shares = Vec::new();
-        for i in 1..=total_shares {
-            let share_vec = secret_data
-                .get_share(i)
-                .map_err(|e| anyhow::anyhow!("Failed to generate share: {:?}", e))?;
-
-            let mnemonic = share_to_mnemonic(&share_vec)?;
-
-            shares.push(TestShare {
-                index: i,
-                data: share_vec,
-                mnemonic,
-            });
-        }
-
-        Ok(shares)
-    }
-
-    fn combine_shares(shares: &[TestShare]) -> Result<Vec<u8>> {
-        if shares.is_empty() {
-            anyhow::bail!("No shares provided");
-        }
-
-        let threshold = shares.len() as u8;
-
-        let mut share_vecs: Vec<Vec<u8>> = Vec::new();
-        for share in shares {
-            share_vecs.push(share.data.clone());
-        }
-
-        let recovered_hex = SecretData::recover_secret(threshold, share_vecs)
-            .context("Failed to recover secret from shares")?;
-
-        let recovered_bytes =
-            hex::decode(recovered_hex).context("Failed to decode recovered secret")?;
-
-        Ok(recovered_bytes)
-    }
-
-    fn serialise_share_hex(share: &TestShare) -> String {
-        let mut result = format!("{:02x}:", share.index);
-        result.push_str(&hex::encode(&share.data));
-        result
-    }
-
-    fn deserialise_share_hex(data: &str) -> Result<TestShare> {
-        let parts: Vec<&str> = data.splitn(2, ':').collect();
-        if parts.len() != 2 {
-            anyhow::bail!("Invalid share format");
-        }
-
-        let index = u8::from_str_radix(parts[0], 16).context("Failed to parse share index")?;
-
-        let data = hex::decode(parts[1]).context("Failed to decode share data")?;
-
-        let mnemonic = share_to_mnemonic(&data)?;
-
-        Ok(TestShare {
-            index,
-            data,
-            mnemonic,
-        })
-    }
-
     #[test]
     fn test_split_and_combine() {
         let secret = b"This is a secret key for testing!";
-        let shares = split_secret_with_data(secret, 2, 5).unwrap();
+        let shares = split_secret(secret, 2, 5).unwrap();
 
         assert_eq!(shares.len(), 5);
 
-        // Test with minimum threshold
-        let recovered = combine_shares(&shares[..2]).unwrap();
+        // Test with minimum threshold (2 shares)
+        let share_strings: Vec<String> =
+            shares.iter().take(2).map(serialise_share).collect();
+        let raw_shares = parse_shares(&share_strings, false).unwrap();
+        let recovered = combine_shares(&raw_shares).unwrap();
         assert_eq!(recovered, secret);
 
         // Test with different share combinations
-        let recovered = combine_shares(&[shares[1].clone(), shares[3].clone()]).unwrap();
+        let share_strings: Vec<String> =
+            vec![serialise_share(&shares[1]), serialise_share(&shares[3])];
+        let raw_shares = parse_shares(&share_strings, false).unwrap();
+        let recovered = combine_shares(&raw_shares).unwrap();
         assert_eq!(recovered, secret);
 
         // Test with more than threshold
-        let recovered =
-            combine_shares(&[shares[0].clone(), shares[2].clone(), shares[4].clone()]).unwrap();
+        let share_strings: Vec<String> = vec![
+            serialise_share(&shares[0]),
+            serialise_share(&shares[2]),
+            serialise_share(&shares[4]),
+        ];
+        let raw_shares = parse_shares(&share_strings, false).unwrap();
+        let recovered = combine_shares(&raw_shares).unwrap();
         assert_eq!(recovered, secret);
     }
 
     #[test]
     fn test_insufficient_shares() {
         let secret = b"Another secret";
-        let shares = split_secret_with_data(secret, 3, 5).unwrap();
+        let shares = split_secret(secret, 3, 5).unwrap();
 
         // With only 2 shares when we need 3, recovery should fail or produce wrong result
-        let result = combine_shares(&shares[..2]);
+        let share_strings: Vec<String> =
+            shares.iter().take(2).map(serialise_share).collect();
+        let raw_shares = parse_shares(&share_strings, false).unwrap();
+        let result = combine_shares(&raw_shares);
         // The library may not detect this, but result should be wrong
         if let Ok(recovered) = result {
             assert_ne!(recovered, secret);
@@ -361,28 +263,15 @@ mod tests {
     }
 
     #[test]
-    fn test_serialisation_hex() {
-        let share = TestShare {
-            index: 3,
-            data: vec![0xde, 0xad, 0xbe, 0xef],
-            mnemonic: "test mnemonic".to_string(),
-        };
-
-        let serialised = serialise_share_hex(&share);
-        assert_eq!(serialised, "03:deadbeef");
-
-        let deserialised = deserialise_share_hex(&serialised).unwrap();
-        assert_eq!(deserialised.index, share.index);
-        assert_eq!(deserialised.data, share.data);
-    }
-
-    #[test]
     fn test_edge_cases() {
         // Test 1-of-1 sharing
         let secret = b"x";
-        let shares = split_secret_with_data(secret, 1, 1).unwrap();
+        let shares = split_secret(secret, 1, 1).unwrap();
         assert_eq!(shares.len(), 1);
-        let recovered = combine_shares(&shares).unwrap();
+
+        let share_strings: Vec<String> = shares.iter().map(serialise_share).collect();
+        let raw_shares = parse_shares(&share_strings, false).unwrap();
+        let recovered = combine_shares(&raw_shares).unwrap();
         assert_eq!(recovered, secret);
 
         // Test invalid threshold
@@ -409,16 +298,14 @@ mod tests {
     #[test]
     fn test_serialisation_roundtrip() {
         let secret = b"Test secret for serialisation";
-        let shares = split_secret_with_data(secret, 2, 3).unwrap();
+        let shares = split_secret(secret, 2, 3).unwrap();
 
-        let serialised: Vec<String> = shares.iter().map(serialise_share_hex).collect();
-        let deserialised: Result<Vec<TestShare>> = serialised
-            .iter()
-            .map(|s| deserialise_share_hex(s))
-            .collect();
-        let deserialised = deserialised.unwrap();
+        // Test full roundtrip through serialisation
+        let serialised: Vec<String> = shares.iter().map(serialise_share).collect();
 
-        let recovered = combine_shares(&deserialised[..2]).unwrap();
+        // Parse back and recover
+        let raw_shares = parse_shares(&serialised[..2], false).unwrap();
+        let recovered = combine_shares(&raw_shares).unwrap();
         assert_eq!(recovered, secret);
     }
 
@@ -429,21 +316,13 @@ mod tests {
         let shares = split_secret(&secret, 2, 3).unwrap();
 
         // Serialize shares as they would be in QR codes
-        let serialised: Vec<String> = shares.iter().map(|s| serialise_share(s)).collect();
+        let serialised: Vec<String> = shares.iter().map(serialise_share).collect();
 
         // Parse back the shares
-        let raw_shares: Result<Vec<RawShare>> = serialised
-            .iter()
-            .map(|s| {
-                let share = deserialise_share(s)?;
-                mnemonic_to_raw_share(&share)
-            })
-            .collect();
-
-        let raw_shares = raw_shares.unwrap();
+        let raw_shares = parse_shares(&serialised[..2], false).unwrap();
 
         // Use the public combine_shares function
-        let recovered = super::combine_shares(&raw_shares[..2]).unwrap();
+        let recovered = combine_shares(&raw_shares).unwrap();
         assert_eq!(recovered, secret);
     }
 }

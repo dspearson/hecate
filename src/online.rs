@@ -44,12 +44,12 @@ pub fn list_files(
             .trim_start_matches("ws://");
 
         if verbose {
-            eprintln!("Connecting to secure server: {}", clean_addr);
+            eprintln!("Connecting to secure server: {clean_addr}");
         }
 
         let client = SecureWebSocketClient::connect(clean_addr, tls_config)
             .await
-            .with_context(|| format!("Failed to connect to {}", server_addr))?;
+            .with_context(|| format!("Failed to connect to {server_addr}"))?;
 
         if auth_key.is_some() {
             client
@@ -88,12 +88,12 @@ pub fn download_file(
             .trim_start_matches("ws://");
 
         if verbose {
-            eprintln!("Connecting to secure server: {}", clean_addr);
+            eprintln!("Connecting to secure server: {clean_addr}");
         }
 
         let client = SecureWebSocketClient::connect(clean_addr, tls_config)
             .await
-            .with_context(|| format!("Failed to connect to {}", server_addr))?;
+            .with_context(|| format!("Failed to connect to {server_addr}"))?;
 
         if auth_key.is_some() {
             client
@@ -104,24 +104,24 @@ pub fn download_file(
 
         // Ensure filename ends with .hecate for server
         let server_name = if !file_name.ends_with(".hecate") {
-            format!("{}.hecate", file_name)
+            format!("{file_name}.hecate")
         } else {
             file_name.to_string()
         };
 
         // Open output file for streaming write
         let file = std::fs::File::create(output_path)
-            .with_context(|| format!("Failed to create output file: {}", output_path))?;
+            .with_context(|| format!("Failed to create output file: {output_path}"))?;
 
         client
             .download_file_streaming(&server_name, file, verbose)
             .await
-            .with_context(|| format!("Failed to download {}", server_name))?;
+            .with_context(|| format!("Failed to download {server_name}"))?;
 
         client.close().await?;
 
         if verbose {
-            eprintln!("Successfully saved to {}", output_path);
+            eprintln!("Successfully saved to {output_path}");
         }
 
         Ok(())
@@ -148,8 +148,7 @@ mod tests {
 
             assert_eq!(
                 clean, expected_clean,
-                "Address cleaning failed for {}",
-                input
+                "Address cleaning failed for {input}"
             );
         }
     }
