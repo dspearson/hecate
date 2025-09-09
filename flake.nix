@@ -73,9 +73,6 @@
           HECATE_AUTH_KEY = "21b01ca51867c87285812b24793abf4df96acd465f6ff3e2e33d38ee85f4b83d";
 
           shellHook = ''
-            echo "Hecate development environment"
-            echo "Run 'just' to see available build commands"
-            
             # Export env vars for musl compilation
             export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=gcc
             export CC_x86_64_unknown_linux_musl=gcc
