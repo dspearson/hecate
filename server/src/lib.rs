@@ -2,8 +2,11 @@ pub mod args;
 pub mod auth;
 pub mod config;
 pub mod health;
+pub mod http_api;
 pub mod protocol;
+pub mod resumable_upload;
 pub mod storage;
+pub mod users;
 pub mod websocket_server;
 
 #[cfg(test)]

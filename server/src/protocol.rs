@@ -7,12 +7,41 @@ pub const MAX_CHUNK_SIZE: usize = 1024 * 1024;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ClientMessage {
-    Auth { key: String },
-    UploadRequest { name: String, size: u64 },
-    DataChunk { data: Vec<u8>, is_final: bool },
+    Auth {
+        key: String,
+    },
+    AuthToken {
+        token: String,
+    }, // New: authenticate with API token
+    UploadRequest {
+        name: String,
+        size: u64,
+    },
+    DataChunk {
+        data: Vec<u8>,
+        is_final: bool,
+    },
     ListRequest,
-    GetRequest { name: String },
+    GetRequest {
+        name: String,
+    },
     Ping,
+    // Resumable upload messages
+    ResumableUploadInit {
+        name: String,
+        size: u64,
+    },
+    ResumableChunk {
+        session_id: String,
+        chunk_index: u32,
+        data: Vec<u8>,
+    },
+    ResumableStatus {
+        session_id: String,
+    },
+    ResumableCancel {
+        session_id: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,6 +50,7 @@ pub enum ServerMessage {
     AuthResult {
         success: bool,
         message: Option<String>,
+        user_id: Option<i64>,
     },
     UploadAccepted {
         name: String,
@@ -46,6 +76,22 @@ pub enum ServerMessage {
         message: String,
     },
     Pong,
+    // Resumable upload responses
+    ResumableSessionCreated {
+        session_id: String,
+        chunk_size: usize,
+        total_chunks: u32,
+    },
+    ResumableStatus {
+        session_id: String,
+        bytes_received: u64,
+        chunks_received: Vec<u32>,
+        is_complete: bool,
+        percentage: f64,
+    },
+    ResumableCancelled {
+        session_id: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,6 +111,8 @@ pub enum ErrorCode {
     QuotaExceeded,
     RateLimited,
     ServerError,
+    SessionNotFound,
+    SessionExpired,
 }
 
 impl fmt::Display for ErrorCode {
@@ -78,6 +126,8 @@ impl fmt::Display for ErrorCode {
             ErrorCode::QuotaExceeded => write!(f, "QUOTA_EXCEEDED"),
             ErrorCode::RateLimited => write!(f, "RATE_LIMITED"),
             ErrorCode::ServerError => write!(f, "SERVER_ERROR"),
+            ErrorCode::SessionNotFound => write!(f, "SESSION_NOT_FOUND"),
+            ErrorCode::SessionExpired => write!(f, "SESSION_EXPIRED"),
         }
     }
 }

@@ -298,6 +298,13 @@ impl ConnectionHandler {
     async fn handle_message(&mut self, msg: ClientMessage) -> Result<Vec<ServerMessage>> {
         match msg {
             ClientMessage::Auth { key } => self.handle_auth(key).await,
+            ClientMessage::AuthToken { token: _ } => {
+                // TODO: Implement token authentication when user management is integrated
+                Ok(vec![ServerMessage::Error {
+                    code: ErrorCode::InvalidRequest,
+                    message: "Token authentication not yet implemented".to_string(),
+                }])
+            }
             ClientMessage::UploadRequest { name, size } => {
                 if !self.authenticated {
                     return Ok(vec![ServerMessage::Error {
@@ -335,6 +342,34 @@ impl ConnectionHandler {
                 self.handle_get_request(name).await
             }
             ClientMessage::Ping => Ok(vec![ServerMessage::Pong]),
+            ClientMessage::ResumableUploadInit { .. } => {
+                // TODO: Implement resumable upload when user management is integrated
+                Ok(vec![ServerMessage::Error {
+                    code: ErrorCode::InvalidRequest,
+                    message: "Resumable uploads not yet implemented".to_string(),
+                }])
+            }
+            ClientMessage::ResumableChunk { .. } => {
+                // TODO: Implement resumable upload when user management is integrated
+                Ok(vec![ServerMessage::Error {
+                    code: ErrorCode::InvalidRequest,
+                    message: "Resumable uploads not yet implemented".to_string(),
+                }])
+            }
+            ClientMessage::ResumableStatus { .. } => {
+                // TODO: Implement resumable upload when user management is integrated
+                Ok(vec![ServerMessage::Error {
+                    code: ErrorCode::InvalidRequest,
+                    message: "Resumable uploads not yet implemented".to_string(),
+                }])
+            }
+            ClientMessage::ResumableCancel { .. } => {
+                // TODO: Implement resumable upload when user management is integrated
+                Ok(vec![ServerMessage::Error {
+                    code: ErrorCode::InvalidRequest,
+                    message: "Resumable uploads not yet implemented".to_string(),
+                }])
+            }
         }
     }
 
@@ -346,12 +381,14 @@ impl ConnectionHandler {
                 Ok(vec![ServerMessage::AuthResult {
                     success: true,
                     message: None,
+                    user_id: None,
                 }])
             } else {
                 warn!("Client {} failed authentication", self.peer_addr);
                 Ok(vec![ServerMessage::AuthResult {
                     success: false,
                     message: Some("Invalid authentication key".to_string()),
+                    user_id: None,
                 }])
             }
         } else {
@@ -359,6 +396,7 @@ impl ConnectionHandler {
             Ok(vec![ServerMessage::AuthResult {
                 success: true,
                 message: None,
+                user_id: None,
             }])
         }
     }
