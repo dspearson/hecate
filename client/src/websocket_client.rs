@@ -322,7 +322,9 @@ impl SecureWebSocketClient {
             }
         }
 
-        writer.flush().map_err(|e| anyhow::anyhow!("Failed to flush output: {}", e))?;
+        writer
+            .flush()
+            .map_err(|e| anyhow::anyhow!("Failed to flush output: {}", e))?;
 
         if verbose {
             eprintln!("Successfully downloaded {total_received} bytes");
