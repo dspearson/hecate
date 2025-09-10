@@ -95,6 +95,7 @@ fn test_server_message_serialisation() {
         ServerMessage::AuthResult {
             success: true,
             message: Some("Authenticated".to_string()),
+            user_id: None,
         },
         ServerMessage::UploadRejected {
             reason: "File too large".to_string(),

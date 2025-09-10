@@ -45,6 +45,7 @@ pub mod test_support {
     }
 
     impl AuthManager {
+        #[allow(dead_code)]
         pub async fn new(config_path: Option<String>) -> Result<Self> {
             let manager = Self {
                 clients: Arc::new(RwLock::new(HashMap::new())),
@@ -58,6 +59,7 @@ pub mod test_support {
             Ok(manager)
         }
 
+        #[allow(dead_code)]
         pub async fn from_single_key(key: &str) -> Result<Self> {
             let mut clients = HashMap::new();
 
@@ -80,6 +82,7 @@ pub mod test_support {
             })
         }
 
+        #[allow(dead_code)]
         pub async fn load_config(&self, path: &str) -> Result<()> {
             if !Path::new(path).exists() {
                 return Ok(());
@@ -102,6 +105,7 @@ pub mod test_support {
             Ok(())
         }
 
+        #[allow(dead_code)]
         pub async fn authenticate(
             &self,
             client_id: &str,
@@ -124,6 +128,7 @@ pub mod test_support {
             Ok(None)
         }
 
+        #[allow(dead_code)]
         pub async fn authenticate_token(
             &self,
             token: &str,
@@ -144,6 +149,7 @@ pub mod test_support {
             }
         }
 
+        #[allow(dead_code)]
         fn hash_key(key: &str) -> Result<String> {
             use argon2::{
                 password_hash::{PasswordHasher, SaltString},
@@ -161,6 +167,7 @@ pub mod test_support {
             Ok(hash)
         }
 
+        #[allow(dead_code)]
         fn verify_key(key: &str, hash: &str) -> Result<bool> {
             let parsed_hash = PasswordHash::new(hash)
                 .map_err(|e| anyhow::anyhow!("Invalid password hash: {}", e))?;
