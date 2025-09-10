@@ -63,8 +63,12 @@ fn share_to_mnemonic(share_data: &[u8]) -> Result<String> {
         let mut chunk = vec![chunk_len as u8]; // First byte is the actual data length in this chunk
         chunk.extend_from_slice(&share_data[offset..offset + chunk_len]);
 
-        // Pad to 32 bytes for BIP39
-        chunk.resize(32, 0);
+        // Pad to 32 bytes for BIP39 with random data to avoid predictable padding words
+        use rand::RngCore;
+        let mut rng = rand::thread_rng();
+        while chunk.len() < 32 {
+            chunk.push(rng.next_u32() as u8);
+        }
 
         let mnemonic =
             Mnemonic::from_entropy(&chunk).context("Failed to create mnemonic from share chunk")?;
@@ -78,23 +82,27 @@ fn share_to_mnemonic(share_data: &[u8]) -> Result<String> {
 }
 
 pub fn serialise_share(share: &Share) -> String {
-    // Use the mnemonic representation for QR codes
-    format!("{}:{}", share.index, share.mnemonic)
+    // Include index in the mnemonic itself for cleaner format
+    // The index is already encoded in the share data, so we just use the mnemonic
+    share.mnemonic.clone()
 }
 
 pub fn deserialise_share(data: &str) -> Result<Share> {
-    let parts: Vec<&str> = data.splitn(2, ':').collect();
-    if parts.len() != 2 {
-        anyhow::bail!("Invalid share format");
+    // Try legacy format first (index:mnemonic)
+    if let Some(colon_pos) = data.find(':') {
+        let index_str = &data[..colon_pos];
+        if let Ok(index) = index_str.parse::<u8>() {
+            let mnemonic = data[colon_pos + 1..].to_string();
+            return Ok(Share { index, mnemonic });
+        }
     }
 
-    let index = parts[0]
-        .parse::<u8>()
-        .context("Failed to parse share index")?;
-
-    let mnemonic = parts[1].to_string();
-
-    Ok(Share { index, mnemonic })
+    // New format: mnemonic only (index is extracted from share data)
+    // We'll extract the index when converting to RawShare
+    Ok(Share {
+        index: 0, // Will be overridden when parsing
+        mnemonic: data.to_string(),
+    })
 }
 
 pub fn parse_shares(inputs: &[String], verbose: bool) -> Result<Vec<RawShare>> {
@@ -121,16 +129,8 @@ fn parse_single_share(input: &str, verbose: bool) -> Result<RawShare> {
         parse_qr_share(input)
     } else {
         // Assume it's mnemonic words or serialised share format
-        if input.contains(':') {
-            // Format: "index:mnemonic words"
-            parse_serialised_share(input)
-        } else {
-            // Just mnemonic words, need to determine index somehow
-            // For now, we'll require the index:mnemonic format
-            anyhow::bail!(
-                "Share must be in format 'index:mnemonic words' or be a QR code file path"
-            )
-        }
+        // Try to parse as serialised share (handles both old and new formats)
+        parse_serialised_share(input)
     }
 }
 
@@ -175,8 +175,16 @@ fn mnemonic_to_raw_share(share: &Share) -> Result<RawShare> {
         full_data.extend_from_slice(&entropy[1..=data_len]);
     }
 
+    // Extract the actual index from the share data
+    // The first byte of the share data is the index
+    let actual_index = if !full_data.is_empty() {
+        full_data[0]
+    } else {
+        share.index // Fallback to provided index
+    };
+
     Ok(RawShare {
-        index: share.index,
+        index: actual_index,
         data: full_data,
     })
 }

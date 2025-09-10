@@ -8,13 +8,15 @@ An experimental encrypted file archiving tool with Shamir Secret Sharing for key
 
 - 🔐 **Strong Encryption**: XChaCha20-Poly1305 authenticated encryption via libsodium
 - 🧩 **Shamir Secret Sharing**: Split keys into n shares, require k to decrypt
-- 💬 **Human-Friendly**: Shares encoded as BIP39 mnemonic phrases
+- 💬 **Human-Friendly**: Shares encoded as BIP39 mnemonic phrases with secure random padding
 - 📱 **QR Codes**: Each share generates a QR code for easy storage/transfer
-- 🌐 **Remote Storage**: Optional Mercury server for encrypted cloud storage via secure WebSocket
+- 🌐 **Remote Storage**: Mercury server with multi-user support and encrypted cloud storage
+- 👥 **Multi-User Support**: Per-user storage isolation, quotas, and authentication
 - 📦 **Efficient Compression**: Zstandard compression before encryption
 - 🔄 **True Streaming**: Memory-efficient pipeline with 1MB chunks, no buffering
 - 🔒 **Transport Security**: TLS support with EC certificates (P-256)
-- 🔑 **Authentication**: Preshared key authentication for server access
+- 🔑 **Authentication**: User accounts with API tokens or preshared keys
+- 📊 **Resumable Uploads**: Chunk-based uploads with automatic resume on failure
 - 🎯 **Certificate Pinning**: Support for SHA256 certificate fingerprint validation
 - 📦 **Build-Time Embedding**: Compile credentials directly into binary for deployment
 
@@ -199,35 +201,67 @@ Example share:
 
 ## Mercury Server
 
-The Mercury server provides remote storage for encrypted archives.
+The Mercury server provides secure remote storage for encrypted archives with comprehensive multi-user support, quotas, and resumable uploads.
 
 ### Running Mercury
 
 ```bash
-cd mercury
+cd server
 cargo build --release
 
-# Basic server
-./target/release/mercury --store /var/hecate --port 10112
+# Generate configuration file
+./target/release/hecate-server --generate-config > server.toml
 
-# With authentication
-MERCURY_AUTH_KEY="your-secret-key" ./target/release/mercury --store /var/hecate --port 10112
+# Edit server.toml to configure:
+# - Storage paths and database location
+# - TLS certificates
+# - Authentication settings
+# - User quotas and limits
+
+# Run with configuration
+./target/release/hecate-server --config server.toml
+
+# Legacy mode (simple preshared key)
+MERCURY_AUTH_KEY="your-secret-key" ./target/release/hecate-server --store /var/hecate --port 10112
 
 # With TLS (generate EC certificate)
 openssl ecparam -genkey -name prime256v1 -out key.pem
 openssl req -new -x509 -key key.pem -out cert.pem -days 365
-./target/release/mercury --store /var/hecate --port 10112 \
-  --tls-cert cert.pem --tls-key key.pem
+./target/release/hecate-server --config server.toml
 ```
+
+### Server Features
+
+#### Multi-User Support
+- **User Accounts**: SQLite database for user management
+- **Storage Isolation**: Each user gets a separate storage directory
+- **Quotas**: Configurable per-user storage limits (default 10GB)
+- **Authentication**: API tokens or username/password
+- **Audit Logging**: Track all user operations
+
+#### Resumable Uploads
+- **Chunk Tracking**: Resume interrupted uploads from last successful chunk
+- **Session Management**: 24-hour upload sessions with automatic cleanup
+- **Integrity Verification**: SHA256 hashing for deduplication
+
+#### HTTP API Endpoints
+- `POST /api/register`: Create new user account
+- `POST /api/login`: Authenticate and get API token
+- `GET /api/user`: Get current user information and quota
+- `POST /api/token`: Generate new API token
 
 ### Server Options
 
+- `--config <FILE>`: Configuration file path
+- `--generate-config`: Generate example configuration
 - `--store <PATH>`: Directory to store encrypted files (default: `./storage`)
-- `--port <PORT>`: Port to listen on (default: `10112`)
+- `--database <URL>`: SQLite database URL (default: `sqlite://hecate.db`)
+- `--port <PORT>`: WebSocket port (default: `10112`)
+- `--http-port <PORT>`: HTTP API port (default: `8080`)
 - `--tls-cert <FILE>`: TLS certificate file (enables TLS)
 - `--tls-key <FILE>`: TLS private key file
 - `--verbose`: Enable verbose logging
-- Environment: `MERCURY_AUTH_KEY` for authentication
+- Environment: `MERCURY_AUTH_KEY` for legacy preshared key auth
 
 ### Protocol
 
@@ -267,7 +301,11 @@ Mercury uses WebSocket (with optional TLS) for communication:
 - **Memory Safety**: Written in Rust with no unsafe code
 - **True Streaming**: Pipeline processes data in 1MB chunks without buffering
 - **Share Security**: Individual shares reveal nothing about the key
+- **Secure Padding**: Random padding prevents predictable BIP39 words
+- **Clean Format**: Shares are pure mnemonics without unnecessary prefixes
 - **No Size Limits**: Streaming architecture handles files of any size
+- **User Isolation**: Complete separation between different users' data
+- **Quota Enforcement**: Prevents storage abuse with configurable limits
 
 ## Examples
 

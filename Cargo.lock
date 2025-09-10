@@ -1123,6 +1123,7 @@ dependencies = [
  "libc",
  "libsodium-rs",
  "qrcode",
+ "rand 0.8.5",
  "ring",
  "rqrr",
  "rustls",
