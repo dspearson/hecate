@@ -88,19 +88,9 @@ pub fn serialise_share(share: &Share) -> String {
 }
 
 pub fn deserialise_share(data: &str) -> Result<Share> {
-    // Try legacy format first (index:mnemonic)
-    if let Some(colon_pos) = data.find(':') {
-        let index_str = &data[..colon_pos];
-        if let Ok(index) = index_str.parse::<u8>() {
-            let mnemonic = data[colon_pos + 1..].to_string();
-            return Ok(Share { index, mnemonic });
-        }
-    }
-
-    // New format: mnemonic only (index is extracted from share data)
-    // We'll extract the index when converting to RawShare
+    // Mnemonic only format - index is embedded in the share data itself
     Ok(Share {
-        index: 0, // Will be overridden when parsing
+        index: 0, // Will be extracted from share data during parsing
         mnemonic: data.to_string(),
     })
 }
@@ -175,14 +165,13 @@ fn mnemonic_to_raw_share(share: &Share) -> Result<RawShare> {
         full_data.extend_from_slice(&entropy[1..=data_len]);
     }
 
-    // Extract the actual index from the share data
-    // The first byte of the share data is the index
-    let actual_index = if !full_data.is_empty() {
-        full_data[0]
-    } else {
-        share.index // Fallback to provided index
-    };
-
+    // Extract the index from the share data - it's the first byte
+    if full_data.is_empty() {
+        anyhow::bail!("Invalid share data: empty");
+    }
+    
+    let actual_index = full_data[0];
+    
     Ok(RawShare {
         index: actual_index,
         data: full_data,
