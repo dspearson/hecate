@@ -3,6 +3,7 @@ pub mod auth;
 pub mod config;
 pub mod health;
 pub mod protocol;
+pub mod storage;
 pub mod websocket_server;
 
 #[cfg(test)]
@@ -41,9 +42,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_auth_manager_creation() {
-        use argon2::password_hash::{SaltString, rand_core::OsRng};
+        use argon2::password_hash::{rand_core::OsRng, SaltString};
         use argon2::{Argon2, PasswordHasher};
-        use auth::{AuthManager, ClientCredentials, ClientPermissions};
+        use auth::test_support::AuthManager;
+        use auth::{ClientCredentials, ClientPermissions};
         use tempfile::tempdir;
         use tokio::fs;
 

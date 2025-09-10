@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use futures_util::{SinkExt, StreamExt};
-use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::ServerConfig;
 use rustls_pemfile::{certs, ec_private_keys, pkcs8_private_keys};
 use std::collections::HashMap;
 use std::io::BufReader;
@@ -16,48 +16,29 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{Mutex, RwLock};
 use tokio_rustls::TlsAcceptor;
-use tokio_tungstenite::{WebSocketStream, accept_async, tungstenite::Message};
+use tokio_tungstenite::{accept_async, tungstenite::Message, WebSocketStream};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::protocol::{
-    ClientMessage, ErrorCode, FileInfo, ServerMessage, validate_chunk_size, validate_file_size,
-    validate_filename,
+    validate_chunk_size, validate_file_size, validate_filename, ClientMessage, ErrorCode, FileInfo,
+    ServerMessage,
 };
 
 // Rate limiting configuration
-const MAX_REQUESTS_PER_MINUTE: u32 = 100;
 const MAX_UPLOADS_PER_HOUR: u32 = 10;
 const MAX_CONCURRENT_CONNECTIONS: usize = 50;
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(300); // 5 minutes
 
 #[derive(Clone)]
 struct RateLimiter {
-    requests: Arc<RwLock<HashMap<SocketAddr, Vec<Instant>>>>,
     uploads: Arc<RwLock<HashMap<SocketAddr, Vec<Instant>>>>,
 }
 
 impl RateLimiter {
     fn new() -> Self {
         Self {
-            requests: Arc::new(RwLock::new(HashMap::new())),
             uploads: Arc::new(RwLock::new(HashMap::new())),
-        }
-    }
-
-    async fn check_request_rate(&self, addr: SocketAddr) -> bool {
-        let mut requests = self.requests.write().await;
-        let now = Instant::now();
-        let one_minute_ago = now - Duration::from_secs(60);
-
-        let entry = requests.entry(addr).or_insert_with(Vec::new);
-        entry.retain(|&t| t > one_minute_ago);
-
-        if entry.len() >= MAX_REQUESTS_PER_MINUTE as usize {
-            false
-        } else {
-            entry.push(now);
-            true
         }
     }
 
@@ -99,15 +80,6 @@ impl WebSocketServer {
             active_connections: Arc::new(Mutex::new(0)),
             tls_acceptor: None,
         })
-    }
-
-    pub fn set_auth_key(&mut self, key: String) {
-        self.auth_key = Some(key);
-    }
-
-    pub async fn reload_auth_config(&mut self, _config_path: &str) -> Result<()> {
-        info!("Auth config reload not implemented for simple key auth");
-        Ok(())
     }
 
     pub async fn with_tls(mut self, cert_path: &PathBuf, key_path: &PathBuf) -> Result<Self> {
@@ -152,14 +124,13 @@ impl WebSocketServer {
         };
 
         // Create TLS config using ring crypto provider
-        let config = ServerConfig::builder_with_provider(
-            rustls::crypto::ring::default_provider().into(),
-        )
-        .with_protocol_versions(&[&rustls::version::TLS12, &rustls::version::TLS13])
-        .unwrap()
-        .with_no_client_auth()
-        .with_single_cert(certs, key)
-        .context("Failed to create TLS configuration")?;
+        let config =
+            ServerConfig::builder_with_provider(rustls::crypto::ring::default_provider().into())
+                .with_protocol_versions(&[&rustls::version::TLS12, &rustls::version::TLS13])
+                .unwrap()
+                .with_no_client_auth()
+                .with_single_cert(certs, key)
+                .context("Failed to create TLS configuration")?;
 
         self.tls_acceptor = Some(TlsAcceptor::from(StdArc::new(config)));
         Ok(self)
@@ -240,7 +211,6 @@ struct ConnectionHandler {
 struct UploadState {
     filename: String,
     temp_path: PathBuf,
-    expected_size: u64,
     received_size: u64,
     writer: Option<tokio::fs::File>,
     is_complete: bool,
@@ -434,7 +404,6 @@ impl ConnectionHandler {
         self.current_upload = Some(UploadState {
             filename: final_name.clone(),
             temp_path,
-            expected_size: size,
             received_size: 0,
             writer: Some(writer),
             is_complete: false,
@@ -476,7 +445,7 @@ impl ConnectionHandler {
 
             // Always send ChunkReceived first
             let bytes_received = upload.received_size;
-            
+
             if is_final {
                 // Close writer
                 if let Some(writer) = upload.writer.take() {
@@ -496,21 +465,17 @@ impl ConnectionHandler {
                 // Mark upload as complete but don't clear it yet
                 upload.is_complete = true;
             }
-            
+
             // Send ChunkReceived first
-            let mut responses = vec![ServerMessage::ChunkReceived {
-                bytes_received,
-            }];
-            
+            let mut responses = vec![ServerMessage::ChunkReceived { bytes_received }];
+
             // If upload is complete, also send UploadComplete
             if upload.is_complete {
                 let total = upload.received_size;
                 self.current_upload = None;
-                responses.push(ServerMessage::UploadComplete {
-                    total_bytes: total,
-                });
+                responses.push(ServerMessage::UploadComplete { total_bytes: total });
             }
-            
+
             Ok(responses)
         } else {
             Ok(vec![ServerMessage::Error {
@@ -578,25 +543,21 @@ impl ConnectionHandler {
         let mut buffer = vec![0u8; 1024 * 1024]; // 1MB chunks
         let mut total_sent = 0u64;
 
-        loop {
-            use tokio::io::AsyncReadExt;
-            let n = file.read(&mut buffer).await?;
-            if n == 0 {
-                break;
-            }
-
-            total_sent += n as u64;
-            let is_final = total_sent >= file_size;
-
-            // This would normally be sent through the WebSocket
-            // For now we just return the first chunk as a response
-            return Ok(vec![ServerMessage::DataChunk {
-                data: buffer[..n].to_vec(),
-                is_final,
-            }]);
+        use tokio::io::AsyncReadExt;
+        let n = file.read(&mut buffer).await?;
+        if n == 0 {
+            return Ok(vec![]);
         }
 
-        Ok(vec![])
+        total_sent += n as u64;
+        let is_final = total_sent >= file_size;
+
+        // This would normally be sent through the WebSocket
+        // For now we just return the first chunk as a response
+        Ok(vec![ServerMessage::DataChunk {
+            data: buffer[..n].to_vec(),
+            is_final,
+        }])
     }
 
     async fn generate_unique_filename(&self, name: &str) -> Result<String> {

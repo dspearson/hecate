@@ -64,9 +64,7 @@ pub fn encrypt_mode(params: EncryptParams) -> Result<()> {
     eprintln!("Generating encryption key");
     let key = crypto::generate_key()?;
 
-    eprintln!(
-        "Splitting key into {total_shares} shares (need {shares_needed} to recover)"
-    );
+    eprintln!("Splitting key into {total_shares} shares (need {shares_needed} to recover)");
     let shares = shamir::split_secret(&key, shares_needed, total_shares)?;
 
     if online_mode {
@@ -95,9 +93,7 @@ pub fn encrypt_mode(params: EncryptParams) -> Result<()> {
             eprintln!("Generated {} QR codes", qr_paths.len());
         }
 
-        println!(
-            "Successfully uploaded encrypted archive as: {accepted_name}"
-        );
+        println!("Successfully uploaded encrypted archive as: {accepted_name}");
         println!("Keys saved as QR codes: {qr_paths:?}");
     } else {
         // Local mode - save to file
@@ -111,9 +107,7 @@ pub fn encrypt_mode(params: EncryptParams) -> Result<()> {
         eprintln!("Encrypting and compressing data");
         archive::create_encrypted_archive(&paths, &output_filename, &key, verbose)?;
 
-        println!(
-            "Successfully created encrypted archive: {output_filename}"
-        );
+        println!("Successfully created encrypted archive: {output_filename}");
         println!("Keys saved as QR codes: {qr_paths:?}");
     }
 

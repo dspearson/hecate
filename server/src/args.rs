@@ -1,41 +1,53 @@
 use clap::Parser;
 use std::path::PathBuf;
 
+/// Command-line arguments for the Hecate storage server
 #[derive(Parser, Debug)]
-#[command(author, version, about = "Mercury - Hecate storage server (WebSocket)", long_about = None)]
+#[command(
+    name = "hecate-server",
+    version,
+    author,
+    about = "Secure storage server for Hecate encrypted archives",
+    long_about = "A WebSocket-based server that receives, stores, and serves encrypted Hecate archives with authentication and TLS security"
+)]
 pub struct Args {
+    /// Path to TOML configuration file
     #[arg(short, long, help = "Path to TOML configuration file")]
     pub config: Option<PathBuf>,
 
+    /// Generate example config file and exit
     #[arg(long, help = "Generate example config file and exit")]
     pub generate_config: bool,
 
+    /// Validate configuration and exit
     #[arg(long, help = "Validate configuration and exit")]
     pub validate: bool,
 
-    #[arg(
-        short,
-        long,
-        default_value = "./storage",
-        help = "Directory to store received files"
-    )]
-    pub store: PathBuf,
+    /// Directory to store received files (overrides config)
+    #[arg(short, long, help = "Directory to store received files")]
+    pub store: Option<PathBuf>,
 
-    #[arg(short, long, default_value = "10112", help = "Port to listen on")]
-    pub port: u16,
+    /// Port to listen on (overrides config)
+    #[arg(short, long, help = "Port to listen on")]
+    pub port: Option<u16>,
 
-    #[arg(short, long, help = "Verbose logging")]
+    /// Enable verbose logging (overrides config)
+    #[arg(short, long, help = "Enable verbose logging")]
     pub verbose: bool,
 
+    /// Authentication key required for access (overrides config)
     #[arg(short('k'), long, help = "Authentication key required for access")]
     pub auth_key: Option<String>,
 
+    /// Path to JSON file containing client credentials (overrides config)
     #[arg(long, help = "Path to JSON file containing client credentials")]
     pub auth_config: Option<PathBuf>,
 
-    #[arg(long, help = "Enable TLS with certificate file")]
+    /// TLS certificate file (overrides config)
+    #[arg(long, help = "TLS certificate file")]
     pub tls_cert: Option<PathBuf>,
 
+    /// TLS private key file (overrides config)
     #[arg(long, help = "TLS private key file")]
     pub tls_key: Option<PathBuf>,
 }

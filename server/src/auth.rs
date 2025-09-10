@@ -1,11 +1,4 @@
-use anyhow::{Context, Result};
-use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::Path;
-use std::sync::Arc;
-use tokio::fs;
-use tokio::sync::RwLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientCredentials {
@@ -35,133 +28,145 @@ impl Default for ClientPermissions {
     }
 }
 
-pub struct AuthManager {
-    clients: Arc<RwLock<HashMap<String, ClientCredentials>>>,
-    config_path: Option<String>,
-}
+#[cfg(test)]
+pub mod test_support {
+    use super::*;
+    use anyhow::{Context, Result};
+    use argon2::{Argon2, PasswordHash, PasswordVerifier};
+    use std::collections::HashMap;
+    use std::path::Path;
+    use std::sync::Arc;
+    use tokio::fs;
+    use tokio::sync::RwLock;
 
-impl AuthManager {
-    pub async fn new(config_path: Option<String>) -> Result<Self> {
-        let manager = Self {
-            clients: Arc::new(RwLock::new(HashMap::new())),
-            config_path,
-        };
-
-        if let Some(ref path) = manager.config_path {
-            manager.load_config(path).await?;
-        }
-
-        Ok(manager)
+    pub struct AuthManager {
+        clients: Arc<RwLock<HashMap<String, ClientCredentials>>>,
+        config_path: Option<String>,
     }
 
-    pub async fn from_single_key(key: &str) -> Result<Self> {
-        let mut clients = HashMap::new();
+    impl AuthManager {
+        pub async fn new(config_path: Option<String>) -> Result<Self> {
+            let manager = Self {
+                clients: Arc::new(RwLock::new(HashMap::new())),
+                config_path,
+            };
 
-        // Create a default client with the provided key
-        let client_id = "default".to_string();
-        let key_hash = Self::hash_key(key)?;
+            if let Some(ref path) = manager.config_path {
+                manager.load_config(path).await?;
+            }
 
-        clients.insert(
-            client_id.clone(),
-            ClientCredentials {
-                client_id,
-                key_hash,
-                permissions: ClientPermissions::default(),
-            },
-        );
-
-        Ok(Self {
-            clients: Arc::new(RwLock::new(clients)),
-            config_path: None,
-        })
-    }
-
-    pub async fn load_config(&self, path: &str) -> Result<()> {
-        if !Path::new(path).exists() {
-            return Ok(());
+            Ok(manager)
         }
 
-        let content = fs::read_to_string(path)
-            .await
-            .context("Failed to read auth config")?;
+        pub async fn from_single_key(key: &str) -> Result<Self> {
+            let mut clients = HashMap::new();
 
-        let credentials: Vec<ClientCredentials> =
-            serde_json::from_str(&content).context("Failed to parse auth config")?;
+            // Create a default client with the provided key
+            let client_id = "default".to_string();
+            let key_hash = Self::hash_key(key)?;
 
-        let mut clients = self.clients.write().await;
-        clients.clear();
+            clients.insert(
+                client_id.clone(),
+                ClientCredentials {
+                    client_id,
+                    key_hash,
+                    permissions: ClientPermissions::default(),
+                },
+            );
 
-        for cred in credentials {
-            clients.insert(cred.client_id.clone(), cred);
+            Ok(Self {
+                clients: Arc::new(RwLock::new(clients)),
+                config_path: None,
+            })
         }
 
-        Ok(())
-    }
+        pub async fn load_config(&self, path: &str) -> Result<()> {
+            if !Path::new(path).exists() {
+                return Ok(());
+            }
 
-    pub async fn authenticate(
-        &self,
-        client_id: &str,
-        key: &str,
-    ) -> Result<Option<ClientPermissions>> {
-        let clients = self.clients.read().await;
+            let content = fs::read_to_string(path)
+                .await
+                .context("Failed to read auth config")?;
 
-        // Authentication is always required - no exceptions
-        if clients.is_empty() {
-            // This should never happen as we validate config has auth
-            anyhow::bail!("No authentication configured - server misconfiguration");
+            let credentials: Vec<ClientCredentials> =
+                serde_json::from_str(&content).context("Failed to parse auth config")?;
+
+            let mut clients = self.clients.write().await;
+            clients.clear();
+
+            for cred in credentials {
+                clients.insert(cred.client_id.clone(), cred);
+            }
+
+            Ok(())
         }
 
-        if let Some(cred) = clients.get(client_id) {
-            if Self::verify_key(key, &cred.key_hash)? {
-                return Ok(Some(cred.permissions.clone()));
+        pub async fn authenticate(
+            &self,
+            client_id: &str,
+            key: &str,
+        ) -> Result<Option<ClientPermissions>> {
+            let clients = self.clients.read().await;
+
+            // Authentication is always required - no exceptions
+            if clients.is_empty() {
+                // This should never happen as we validate config has auth
+                anyhow::bail!("No authentication configured - server misconfiguration");
+            }
+
+            if let Some(cred) = clients.get(client_id) {
+                if Self::verify_key(key, &cred.key_hash)? {
+                    return Ok(Some(cred.permissions.clone()));
+                }
+            }
+
+            Ok(None)
+        }
+
+        pub async fn authenticate_token(
+            &self,
+            token: &str,
+        ) -> Result<Option<(String, ClientPermissions)>> {
+            // Token format: "client_id:key"
+            let parts: Vec<&str> = token.splitn(2, ':').collect();
+            if parts.len() != 2 {
+                return Ok(None);
+            }
+
+            let client_id = parts[0];
+            let key = parts[1];
+
+            if let Some(perms) = self.authenticate(client_id, key).await? {
+                Ok(Some((client_id.to_string(), perms)))
+            } else {
+                Ok(None)
             }
         }
 
-        Ok(None)
-    }
+        fn hash_key(key: &str) -> Result<String> {
+            use argon2::{
+                password_hash::{PasswordHasher, SaltString},
+                Argon2,
+            };
 
-    pub async fn authenticate_token(
-        &self,
-        token: &str,
-    ) -> Result<Option<(String, ClientPermissions)>> {
-        // Token format: "client_id:key"
-        let parts: Vec<&str> = token.splitn(2, ':').collect();
-        if parts.len() != 2 {
-            return Ok(None);
+            let salt = SaltString::generate(&mut argon2::password_hash::rand_core::OsRng);
+            let argon2 = Argon2::default();
+
+            let hash = argon2
+                .hash_password(key.as_bytes(), &salt)
+                .map_err(|e| anyhow::anyhow!("Failed to hash key: {}", e))?
+                .to_string();
+
+            Ok(hash)
         }
 
-        let client_id = parts[0];
-        let key = parts[1];
+        fn verify_key(key: &str, hash: &str) -> Result<bool> {
+            let parsed_hash = PasswordHash::new(hash)
+                .map_err(|e| anyhow::anyhow!("Invalid password hash: {}", e))?;
 
-        if let Some(perms) = self.authenticate(client_id, key).await? {
-            Ok(Some((client_id.to_string(), perms)))
-        } else {
-            Ok(None)
+            let argon2 = Argon2::default();
+            Ok(argon2.verify_password(key.as_bytes(), &parsed_hash).is_ok())
         }
-    }
-
-    fn hash_key(key: &str) -> Result<String> {
-        use argon2::{
-            Argon2,
-            password_hash::{PasswordHasher, SaltString},
-        };
-
-        let salt = SaltString::generate(&mut argon2::password_hash::rand_core::OsRng);
-        let argon2 = Argon2::default();
-
-        let hash = argon2
-            .hash_password(key.as_bytes(), &salt)
-            .map_err(|e| anyhow::anyhow!("Failed to hash key: {}", e))?
-            .to_string();
-
-        Ok(hash)
-    }
-
-    fn verify_key(key: &str, hash: &str) -> Result<bool> {
-        let parsed_hash =
-            PasswordHash::new(hash).map_err(|e| anyhow::anyhow!("Invalid password hash: {}", e))?;
-
-        let argon2 = Argon2::default();
-        Ok(argon2.verify_password(key.as_bytes(), &parsed_hash).is_ok())
     }
 }

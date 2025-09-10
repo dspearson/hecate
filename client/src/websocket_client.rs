@@ -302,7 +302,7 @@ impl SecureWebSocketClient {
 
                     writer
                         .write_all(&chunk)
-                        .context("Failed to write chunk to output")?;
+                        .map_err(|e| anyhow::anyhow!("Failed to write chunk to output: {}", e))?;
 
                     if verbose && (total_received % (10 * 1024 * 1024) == 0 || is_final) {
                         eprintln!("Received {total_received} bytes");
@@ -322,7 +322,7 @@ impl SecureWebSocketClient {
             }
         }
 
-        writer.flush().context("Failed to flush output")?;
+        writer.flush().map_err(|e| anyhow::anyhow!("Failed to flush output: {}", e))?;
 
         if verbose {
             eprintln!("Successfully downloaded {total_received} bytes");

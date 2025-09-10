@@ -56,11 +56,8 @@ mod end_to_end_tests {
         assert!(archive_path.metadata().unwrap().len() > 0);
 
         // Recover key from shares (using only 2 of 3)
-        let share_strings: Vec<String> = shares
-            .iter()
-            .take(2)
-            .map(shamir::serialise_share)
-            .collect();
+        let share_strings: Vec<String> =
+            shares.iter().take(2).map(shamir::serialise_share).collect();
 
         let raw_shares = shamir::parse_shares(&share_strings, false).unwrap();
         let recovered_key = shamir::combine_shares(&raw_shares).unwrap();
@@ -130,11 +127,8 @@ mod end_to_end_tests {
         let shares = shamir::split_secret(&key, 2, 3).unwrap();
 
         // Serialize and parse shares
-        let share_strings: Vec<String> = shares
-            .iter()
-            .take(2)
-            .map(shamir::serialise_share)
-            .collect();
+        let share_strings: Vec<String> =
+            shares.iter().take(2).map(shamir::serialise_share).collect();
 
         let raw_shares = shamir::parse_shares(&share_strings, false).unwrap();
 
@@ -152,11 +146,8 @@ mod end_to_end_tests {
         let shares = shamir::split_secret(&key, 2, 3).unwrap();
 
         // Try to combine with only 1 share (need 2)
-        let share_strings: Vec<String> = shares
-            .iter()
-            .take(1)
-            .map(shamir::serialise_share)
-            .collect();
+        let share_strings: Vec<String> =
+            shares.iter().take(1).map(shamir::serialise_share).collect();
 
         let result = shamir::parse_shares(&share_strings, false);
         // Should fail because we don't have enough shares

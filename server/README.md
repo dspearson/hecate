@@ -1,6 +1,6 @@
-# Mercury
+# Hecate Server
 
-An experimental storage server for Hecate encrypted archives with WebSocket streaming, TLS support, and multi-client authentication.
+A secure storage server for Hecate encrypted archives with WebSocket streaming, TLS support, and multi-client authentication.
 
 **Note**: This is a hobby project and may contain bugs. Use at your own risk. Not suitable for production use without thorough testing and security review.
 
@@ -21,7 +21,7 @@ An experimental storage server for Hecate encrypted archives with WebSocket stre
 
 ```bash
 cargo build --release
-./target/release/mercury --generate-config > mercury.toml
+./target/release/hecate-server --generate-config > hecate-server.toml
 ```
 
 ### Generate TLS Certificate
@@ -38,10 +38,10 @@ openssl req -new -x509 -key key.pem -out cert.pem -days 365
 
 ```bash
 # With configuration file
-mercury --config mercury.toml
+hecate-server --config hecate-server.toml
 
 # Or with command-line arguments
-mercury --store /var/mercury --port 10112 \
+hecate-server --store /var/hecate-server --port 10112 \
   --tls-cert cert.pem --tls-key key.pem
 ```
 
@@ -50,7 +50,7 @@ mercury --store /var/mercury --port 10112 \
 #### Single Key Mode
 ```bash
 # Simple preshared key
-MERCURY_AUTH_KEY="your-secret-key" mercury --config mercury.toml
+MERCURY_AUTH_KEY="your-secret-key" hecate-server --config hecate-server.toml
 ```
 
 #### Multi-Client Mode
@@ -71,20 +71,20 @@ cat > auth.json << EOF
 EOF
 
 # Run with auth config
-mercury --config mercury.toml --auth-config auth.json
+hecate-server --config hecate-server.toml --auth-config auth.json
 ```
 
 ## Configuration
 
-Example `mercury.toml`:
+Example `hecate-server.toml`:
 ```toml
-store_path = "/var/mercury/storage"
+store_path = "/var/hecate-server/storage"
 port = 10112
 verbose = false
 
 [tls]
-cert_path = "/etc/mercury/cert.pem"
-key_path = "/etc/mercury/key.pem"
+cert_path = "/etc/hecate-server/cert.pem"
+key_path = "/etc/hecate-server/key.pem"
 
 [limits]
 max_file_size_mb = 10240  # 10GB
@@ -131,10 +131,10 @@ Server: END
 ### Systemd Service
 
 ```bash
-sudo cp mercury.service /etc/systemd/system/
+sudo cp hecate-server.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable mercury
-sudo systemctl start mercury
+sudo systemctl enable hecate-server
+sudo systemctl start hecate-server
 ```
 
 ### Docker
@@ -147,9 +147,9 @@ RUN cargo build --release
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/mercury /usr/local/bin/
+COPY --from=builder /app/target/release/hecate-server /usr/local/bin/
 EXPOSE 10112
-CMD ["mercury", "--config", "/etc/mercury/mercury.toml"]
+CMD ["hecate-server", "--config", "/etc/hecate-server/hecate-server.toml"]
 ```
 
 ## Security Considerations

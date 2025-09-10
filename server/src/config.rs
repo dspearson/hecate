@@ -84,7 +84,7 @@ fn default_bind() -> String {
     "0.0.0.0".to_string()
 }
 fn default_storage() -> PathBuf {
-    PathBuf::from("/var/lib/mercury/storage")
+    PathBuf::from("/var/lib/hecate-server/storage")
 }
 fn default_max_connections() -> usize {
     50
@@ -178,12 +178,12 @@ impl Config {
     /// Merge with command-line arguments (CLI takes precedence)
     pub fn merge_with_args(&mut self, args: &crate::args::Args) {
         // Server settings
-        if args.port != default_port() {
-            self.server.port = args.port;
+        if let Some(port) = args.port {
+            self.server.port = port;
         }
 
-        if args.store != PathBuf::from("./storage") {
-            self.server.storage_path = args.store.clone();
+        if let Some(ref store) = args.store {
+            self.server.storage_path = store.clone();
         }
 
         // TLS settings
@@ -255,17 +255,17 @@ impl Config {
             server: ServerConfig {
                 port: 10112,
                 bind: "0.0.0.0".to_string(),
-                storage_path: PathBuf::from("/var/lib/mercury/storage"),
+                storage_path: PathBuf::from("/var/lib/hecate-server/storage"),
                 max_connections: 50,
                 connection_timeout_secs: 300,
             },
             tls: TlsConfig {
-                cert_path: Some(PathBuf::from("/etc/mercury/cert.pem")),
-                key_path: Some(PathBuf::from("/etc/mercury/key.pem")),
+                cert_path: Some(PathBuf::from("/etc/hecate-server/cert.pem")),
+                key_path: Some(PathBuf::from("/etc/hecate-server/key.pem")),
             },
             auth: AuthConfig {
                 auth_key: None,
-                auth_config_path: Some(PathBuf::from("/etc/mercury/auth.json")),
+                auth_config_path: Some(PathBuf::from("/etc/hecate-server/auth.json")),
             },
             health: HealthConfig {
                 enabled: true,

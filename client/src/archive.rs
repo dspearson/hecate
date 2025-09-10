@@ -56,8 +56,7 @@ fn add_path_to_archive<W: Write>(
             eprintln!("  Adding file: {relative_path:?}");
         }
 
-        let mut file =
-            File::open(path).with_context(|| format!("Failed to open file {path:?}"))?;
+        let mut file = File::open(path).with_context(|| format!("Failed to open file {path:?}"))?;
 
         // For root files, use just the filename
         let archive_path = if path == base_path {

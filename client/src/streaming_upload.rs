@@ -47,8 +47,7 @@ impl Write for StreamingUploadWriter {
             remaining = &remaining[to_write..];
 
             if self.buffer.len() == MAX_CHUNK_SIZE {
-                self.flush_buffer()
-                    .map_err(std::io::Error::other)?;
+                self.flush_buffer().map_err(std::io::Error::other)?;
             }
         }
 
@@ -56,8 +55,7 @@ impl Write for StreamingUploadWriter {
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        self.flush_buffer()
-            .map_err(std::io::Error::other)
+        self.flush_buffer().map_err(std::io::Error::other)
     }
 }
 

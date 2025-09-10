@@ -146,10 +146,7 @@ mod tests {
                 .trim_start_matches("wss://")
                 .trim_start_matches("ws://");
 
-            assert_eq!(
-                clean, expected_clean,
-                "Address cleaning failed for {input}"
-            );
+            assert_eq!(clean, expected_clean, "Address cleaning failed for {input}");
         }
     }
 }

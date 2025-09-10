@@ -1,0 +1,50 @@
+[Unit]
+Description=Hecate Secure Storage Server
+After=network.target
+Documentation=https://github.com/dspearson/hecate
+
+[Service]
+Type=simple
+User=hecate
+Group=hecate
+WorkingDirectory=/var/lib/hecate-server
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/hecate-server/storage
+ReadOnlyPaths=/etc/hecate-server
+
+# Environment
+Environment="HECATE_AUTH_KEY=change-this-in-production"
+EnvironmentFile=-/etc/hecate-server/hecate-server.env
+
+# Service - using config file
+ExecStart=/usr/local/bin/hecate-server \
+    --config /etc/hecate-server/config.toml
+
+# Alternative: Command-line configuration
+# ExecStart=/usr/local/bin/hecate-server \
+#     --store /var/lib/hecate-server/storage \
+#     --port 10112 \
+#     --tls-cert /etc/hecate-server/cert.pem \
+#     --tls-key /etc/hecate-server/key.pem \
+#     --auth-config /etc/hecate-server/auth.json \
+#     --verbose
+
+Restart=always
+RestartSec=5
+
+# Resource limits
+LimitNOFILE=65535
+LimitNPROC=512
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hecate-server
+
+[Install]
+WantedBy=multi-user.target

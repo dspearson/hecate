@@ -222,8 +222,7 @@ mod tests {
         assert_eq!(shares.len(), 5);
 
         // Test with minimum threshold (2 shares)
-        let share_strings: Vec<String> =
-            shares.iter().take(2).map(serialise_share).collect();
+        let share_strings: Vec<String> = shares.iter().take(2).map(serialise_share).collect();
         let raw_shares = parse_shares(&share_strings, false).unwrap();
         let recovered = combine_shares(&raw_shares).unwrap();
         assert_eq!(recovered, secret);
@@ -252,8 +251,7 @@ mod tests {
         let shares = split_secret(secret, 3, 5).unwrap();
 
         // With only 2 shares when we need 3, recovery should fail or produce wrong result
-        let share_strings: Vec<String> =
-            shares.iter().take(2).map(serialise_share).collect();
+        let share_strings: Vec<String> = shares.iter().take(2).map(serialise_share).collect();
         let raw_shares = parse_shares(&share_strings, false).unwrap();
         let result = combine_shares(&raw_shares);
         // The library may not detect this, but result should be wrong

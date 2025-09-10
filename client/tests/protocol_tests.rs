@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod protocol_tests {
     use hecate::protocol::*;
-    
 
     #[test]
     fn test_filename_validation_valid() {
