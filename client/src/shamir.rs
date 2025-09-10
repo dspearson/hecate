@@ -63,7 +63,13 @@ fn share_to_mnemonic(share_data: &[u8]) -> Result<String> {
         let mut chunk = vec![chunk_len as u8]; // First byte is the actual data length in this chunk
         chunk.extend_from_slice(&share_data[offset..offset + chunk_len]);
 
-        // Pad to 32 bytes for BIP39 with random data to avoid predictable padding words
+        // Pad to 32 bytes for BIP39 with random data
+        // Benefits of random padding:
+        // 1. Security: Makes shares indistinguishable (no predictable patterns)
+        // 2. Privacy: Padding words vary between shares, preventing correlation
+        // 3. QR efficiency: Full mnemonics still fit easily in QR codes
+        // Note: We keep the full padded mnemonic rather than stripping it because
+        // BIP39 checksums prevent truncation, and the size difference is negligible
         use rand::RngCore;
         let mut rng = rand::thread_rng();
         while chunk.len() < 32 {
@@ -82,13 +88,13 @@ fn share_to_mnemonic(share_data: &[u8]) -> Result<String> {
 }
 
 pub fn serialise_share(share: &Share) -> String {
-    // Include index in the mnemonic itself for cleaner format
-    // The index is already encoded in the share data, so we just use the mnemonic
+    // Return the full mnemonic - the random padding adds security
+    // and the QR code size difference isn't significant
     share.mnemonic.clone()
 }
 
 pub fn deserialise_share(data: &str) -> Result<Share> {
-    // Mnemonic only format - index is embedded in the share data itself
+    // Simple deserialization - just the mnemonic
     Ok(Share {
         index: 0, // Will be extracted from share data during parsing
         mnemonic: data.to_string(),
