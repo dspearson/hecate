@@ -1,36 +1,34 @@
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ClientCredentials {
-    pub client_id: String,
-    pub key_hash: String, // Argon2 hash
-    pub permissions: ClientPermissions,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ClientPermissions {
-    pub can_upload: bool,
-    pub can_download: bool,
-    pub can_list: bool,
-    pub max_file_size: Option<u64>,     // Per-file limit (enforced)
-    pub max_total_storage: Option<u64>, // Total storage quota (not enforced)
-}
-
-impl Default for ClientPermissions {
-    fn default() -> Self {
-        Self {
-            can_upload: true,
-            can_download: true,
-            can_list: true,
-            max_file_size: None,
-            max_total_storage: None,
-        }
-    }
-}
-
 #[cfg(test)]
 pub mod test_support {
-    use super::*;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ClientCredentials {
+        pub client_id: String,
+        pub key_hash: String, // Argon2 hash
+        pub permissions: ClientPermissions,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ClientPermissions {
+        pub can_upload: bool,
+        pub can_download: bool,
+        pub can_list: bool,
+        pub max_file_size: Option<u64>,     // Per-file limit (enforced)
+        pub max_total_storage: Option<u64>, // Total storage quota (not enforced)
+    }
+
+    impl Default for ClientPermissions {
+        fn default() -> Self {
+            Self {
+                can_upload: true,
+                can_download: true,
+                can_list: true,
+                max_file_size: None,
+                max_total_storage: None,
+            }
+        }
+    }
     use anyhow::{Context, Result};
     use argon2::{Argon2, PasswordHash, PasswordVerifier};
     use std::collections::HashMap;
