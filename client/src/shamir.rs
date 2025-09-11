@@ -175,9 +175,9 @@ fn mnemonic_to_raw_share(share: &Share) -> Result<RawShare> {
     if full_data.is_empty() {
         anyhow::bail!("Invalid share data: empty");
     }
-    
+
     let actual_index = full_data[0];
-    
+
     Ok(RawShare {
         index: actual_index,
         data: full_data,

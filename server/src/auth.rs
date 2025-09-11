@@ -15,7 +15,7 @@ pub mod test_support {
         pub can_upload: bool,
         pub can_download: bool,
         pub can_list: bool,
-        pub max_file_size: Option<u64>,     // Per-file limit (enforced)
+        pub max_file_size: Option<u64>, // Per-file limit (enforced)
         pub max_total_storage: Option<u64>, // Total storage quota (not enforced)
     }
 
