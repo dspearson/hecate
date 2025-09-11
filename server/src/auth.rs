@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[allow(dead_code)]
 pub mod test_support {
     use serde::{Deserialize, Serialize};
 
