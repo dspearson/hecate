@@ -47,8 +47,7 @@ mod tests {
     async fn test_auth_manager_creation() {
         use argon2::password_hash::{rand_core::OsRng, SaltString};
         use argon2::{Argon2, PasswordHasher};
-        use auth::test_support::AuthManager;
-        use auth::{ClientCredentials, ClientPermissions};
+        use auth::test_support::{AuthManager, ClientCredentials, ClientPermissions};
         use tempfile::tempdir;
         use tokio::fs;
 

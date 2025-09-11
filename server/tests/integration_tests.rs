@@ -113,38 +113,8 @@ fn test_server_message_serialisation() {
     }
 }
 
-#[tokio::test]
-async fn test_auth_with_argon2() {
-    use argon2::password_hash::{rand_core::OsRng, SaltString};
-    use argon2::{Argon2, PasswordHasher};
-    use hecate_server::auth::{ClientCredentials, ClientPermissions};
-
-    // Create a test auth config file
-    let dir = tempdir().unwrap();
-    let auth_file = dir.path().join("auth.json");
-
-    // Generate a password hash
-    let password = "test_password";
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
-    let password_hash = argon2.hash_password(password.as_bytes(), &salt).unwrap();
-
-    let clients = vec![ClientCredentials {
-        client_id: "test_client".to_string(),
-        key_hash: password_hash.to_string(),
-        permissions: ClientPermissions::default(),
-    }];
-
-    let json = serde_json::to_string_pretty(&clients).unwrap();
-    fs::write(&auth_file, json).await.unwrap();
-
-    // Just verify the file was created correctly
-    assert!(auth_file.exists());
-    let content = fs::read_to_string(&auth_file).await.unwrap();
-    let loaded_clients: Vec<ClientCredentials> = serde_json::from_str(&content).unwrap();
-    assert_eq!(loaded_clients.len(), 1);
-    assert_eq!(loaded_clients[0].client_id, "test_client");
-}
+// Test removed: ClientCredentials and ClientPermissions structs are not used
+// in the actual implementation, only in test support code
 
 #[test]
 fn test_config_merge() {
