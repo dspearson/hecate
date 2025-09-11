@@ -1,23 +1,20 @@
 # Hecate
 
-An experimental encrypted file archiving tool with Shamir Secret Sharing for key management. Hecate encrypts files using XChaCha20-Poly1305 and splits the encryption key into multiple shares, allowing recovery with a configurable threshold of shares.
-
-**Note**: This is a hobby project and may contain bugs. Use at your own risk and always keep backups of important data.
+A secure file archiving tool that encrypts files/directories using modern cryptography and splits the encryption key using Shamir Secret Sharing, with shares encoded as BIP39 mnemonics and QR codes.
 
 ## Features
 
-- 🔐 **Strong Encryption**: XChaCha20-Poly1305 authenticated encryption via libsodium
+- 🔐 **Strong Encryption**: XChaCha20-Poly1305 authenticated encryption via libsodium secretstream
 - 🧩 **Shamir Secret Sharing**: Split keys into n shares, require k to decrypt
-- 💬 **Human-Friendly**: Shares encoded as BIP39 mnemonic phrases with secure random padding
-- 📱 **QR Codes**: Each share generates a QR code for easy storage/transfer
-- 🌐 **Remote Storage**: Mercury server with multi-user support and encrypted cloud storage
-- 👥 **Multi-User Support**: Per-user storage isolation, quotas, and authentication
+- 💬 **Human-Friendly**: Shares encoded as BIP39 mnemonic phrases
+- 📱 **QR Codes**: Each share generates a QR code for easy storage/distribution
+- 🌐 **Remote Storage**: Upload encrypted archives to Hecate server via secure WebSocket
 - 📦 **Efficient Compression**: Zstandard compression before encryption
-- 🔄 **True Streaming**: Memory-efficient pipeline with 1MB chunks, no buffering
-- 🔒 **Transport Security**: TLS support with EC certificates (P-256)
-- 🔑 **Authentication**: User accounts with API tokens or preshared keys
-- 📊 **Resumable Uploads**: Chunk-based uploads with automatic resume on failure
-- 🎯 **Certificate Pinning**: Support for SHA256 certificate fingerprint validation
+- 🔄 **True Streaming**: Memory-efficient pipeline with 1MB chunks, no file size limits
+- 🔒 **Transport Security**: TLS with EC certificates (P-256)
+- 🔑 **Authentication**: Preshared key authentication with Argon2 hashing
+- 🎯 **Certificate Pinning**: Optional SHA256 certificate fingerprint validation
+- ⚙️ **Configuration Files**: Support for server aliases and per-server settings
 - 📦 **Build-Time Embedding**: Compile credentials directly into binary for deployment
 
 ## Installation
@@ -26,19 +23,22 @@ An experimental encrypted file archiving tool with Shamir Secret Sharing for key
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/hecate.git
+git clone https://github.com/dspearson/hecate.git
 cd hecate
 
-# Build release binary
+# Build release binaries
 cargo build --release
 
-# Binary will be at ./target/release/hecate
+# Binaries will be at:
+# - ./target/release/hecate (client)
+# - ./target/release/hecate-server (server)
 ```
 
 ### Requirements
 
-- Rust 1.75+ (edition 2024)
+- Rust edition 2024
 - libsodium development libraries
+- For development: Nix flakes with direnv (optional but recommended)
 
 ## Configuration
 
@@ -146,18 +146,11 @@ hecate backup.hecate --unpack
 hecate backup.hecate --decrypt --key key-01.png --key key-02.png
 ```
 
-### Remote Storage with Mercury Server
+### Remote Storage with Hecate Server
 
 ```bash
-# Upload to server (automatic .hecate extension, no need to specify)
+# Upload to server (automatic .hecate extension)
 hecate documents/ --online --name my-backup --server backup.example.com:10112
-# Output: Successfully uploaded encrypted archive as: my-backup.hecate
-# Keys saved as QR codes: ["my-backup-key-01.png", "my-backup-key-02.png", "my-backup-key-03.png"]
-
-# If name exists, server adds timestamp
-hecate documents/ --online --name my-backup --server backup.example.com:10112
-# Output: Successfully uploaded encrypted archive as: my-backup-20250904-141622.hecate
-# Keys saved as QR codes: ["my-backup-20250904-141622-key-01.png", ...]
 
 # List available files
 hecate --online --list --server backup.example.com:10112
@@ -189,21 +182,13 @@ hecate --online --list --server backup.example.com:10112 \
 
 ### Share Format
 
-Each share consists of:
-- Share index and threshold information
-- BIP39 mnemonic words (usually 24 words per 32 bytes)
-- Multiple mnemonics joined with `|` for larger shares
+Each share is encoded as BIP39 mnemonic words (24 words per share) with the share index embedded in the encoding. The shares include random padding for security benefits, ensuring that individual shares reveal nothing about the encryption key.
 
-Example share:
-```
-1:abandon ability able about above absent absorb abstract absurd abuse access accident account accuse achieve acid acoustic acquire across act action active actor actress actual
-```
+## Hecate Server
 
-## Mercury Server
+The Hecate server provides secure remote storage for encrypted archives.
 
-The Mercury server provides secure remote storage for encrypted archives with comprehensive multi-user support, quotas, and resumable uploads.
-
-### Running Mercury
+### Running the Server
 
 ```bash
 cd server
@@ -221,8 +206,8 @@ cargo build --release
 # Run with configuration
 ./target/release/hecate-server --config server.toml
 
-# Legacy mode (simple preshared key)
-MERCURY_AUTH_KEY="your-secret-key" ./target/release/hecate-server --store /var/hecate --port 10112
+# With authentication (preshared key)
+MERCURY_AUTH_KEY="your-secret-key" ./target/release/hecate-server --config server.toml
 
 # With TLS (generate EC certificate)
 openssl ecparam -genkey -name prime256v1 -out key.pem
@@ -232,40 +217,27 @@ openssl req -new -x509 -key key.pem -out cert.pem -days 365
 
 ### Server Features
 
-#### Multi-User Support
-- **User Accounts**: SQLite database for user management
-- **Storage Isolation**: Each user gets a separate storage directory
-- **Quotas**: Configurable per-user storage limits (default 10GB)
-- **Authentication**: API tokens or username/password
-- **Audit Logging**: Track all user operations
-
-#### Resumable Uploads
-- **Chunk Tracking**: Resume interrupted uploads from last successful chunk
-- **Session Management**: 24-hour upload sessions with automatic cleanup
-- **Integrity Verification**: SHA256 hashing for deduplication
-
-#### HTTP API Endpoints
-- `POST /api/register`: Create new user account
-- `POST /api/login`: Authenticate and get API token
-- `GET /api/user`: Get current user information and quota
-- `POST /api/token`: Generate new API token
+- **Secure Storage**: Accepts encrypted archives via WebSocket (TLS required)
+- **Authentication**: Preshared key authentication with Argon2 hashing
+- **Health Monitoring**: HTTP endpoints for health checks (/health, /livez, /readyz, /metrics)
+- **Streaming Transfer**: Memory-efficient 1MB chunk transfers
+- **Collision Handling**: Automatic filename deduplication with timestamps/UUIDs
+- **Configuration**: TOML-based configuration or command-line arguments
 
 ### Server Options
 
 - `--config <FILE>`: Configuration file path
 - `--generate-config`: Generate example configuration
 - `--store <PATH>`: Directory to store encrypted files (default: `./storage`)
-- `--database <URL>`: SQLite database URL (default: `sqlite://hecate.db`)
 - `--port <PORT>`: WebSocket port (default: `10112`)
-- `--http-port <PORT>`: HTTP API port (default: `8080`)
 - `--tls-cert <FILE>`: TLS certificate file (enables TLS)
 - `--tls-key <FILE>`: TLS private key file
 - `--verbose`: Enable verbose logging
-- Environment: `MERCURY_AUTH_KEY` for legacy preshared key auth
+- Environment: `MERCURY_AUTH_KEY` for preshared key authentication
 
 ### Protocol
 
-Mercury uses WebSocket (with optional TLS) for communication:
+The server uses WebSocket (with TLS) for communication:
 
 1. **Connection**: WebSocket upgrade (wss:// for TLS, ws:// for plain)
 
@@ -293,19 +265,17 @@ Mercury uses WebSocket (with optional TLS) for communication:
 
 ## Security Considerations
 
-- **Key Management**: The encryption key never touches disk unencrypted
+- **Key Generation**: Random 256-bit key using libsodium's secure RNG
+- **Authenticated Encryption**: XChaCha20-Poly1305 AEAD prevents tampering
 - **Forward Secrecy**: Each encryption uses a unique nonce
-- **Authentication**: AEAD prevents tampering with encrypted data
-- **Transport Security**: Optional TLS with EC certificates (P-256)
-- **Server Access**: Optional preshared key authentication for Mercury servers
+- **Transport Security**: TLS with EC certificates (P-256)
+- **Authentication**: Preshared key authentication with Argon2 hashing
 - **Memory Safety**: Written in Rust with no unsafe code
-- **True Streaming**: Pipeline processes data in 1MB chunks without buffering
+- **True Streaming**: Pipeline processes data in 1MB chunks without buffering entire archives
 - **Share Security**: Individual shares reveal nothing about the key
-- **Secure Padding**: Random padding prevents predictable BIP39 words
-- **Clean Format**: Shares are pure mnemonics without unnecessary prefixes
+- **Random Padding**: Shares include random padding for security benefits
 - **No Size Limits**: Streaming architecture handles files of any size
-- **User Isolation**: Complete separation between different users' data
-- **Quota Enforcement**: Prevents storage abuse with configurable limits
+- **Certificate Pinning**: Optional SHA256 fingerprint validation for enhanced security
 
 ## Examples
 
@@ -346,7 +316,7 @@ hecate important-files/ --output personal-backup.hecate
 
 ## Authentication
 
-Hecate supports authentication for remote Mercury servers using preshared keys:
+Hecate supports authentication for remote servers using preshared keys:
 
 ### Configuration Methods
 
